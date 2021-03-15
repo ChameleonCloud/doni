@@ -1,42 +1,35 @@
-# This should match the default Python version in the test actions
+# Ensure builder and runtime use same python binary
 ARG python_version=3.8
+FROM python:${python_version}-slim-buster as python-base
+ENV VIRTUAL_ENV=/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+ENV POETRY_VERSION=1.1.5
+RUN pip install "poetry==$POETRY_VERSION"
 
-FROM python:${python_version} as builder
-# netifaces doesn't have wheels built for Python >3.6; build it ourselves
-# and then install in the next stage.
-# yappi also doesn't have any wheel built.
-# Added wheel for psutil to make ARM64 happy
+# First stage to compile deps
+FROM python-base as venv-builder
 
-RUN pip wheel \
-  --wheel-dir /custom-wheels \
-  netifaces \
-  yappi \
-  psutil
+RUN apt update && apt install -y --no-install-recommends \
+    gcc \
+    linux-libc-dev \
+    libc6-dev
 
-FROM python:${python_version}-slim as base
+RUN python -m venv $VIRTUAL_ENV
+COPY poetry.lock pyproject.toml ./
+RUN poetry install --no-root --no-dev -vvv
 
+# Second stage copies venv from first
+FROM python-base as runtime
+#create directory to mount as volume
 RUN mkdir -p /work
 WORKDIR /work
 
-RUN pip3 install poetry
-RUN poetry config virtualenvs.create false --local
-
-COPY --from=builder /custom-wheels .wheels
-
-ADD poetry.lock .
-ADD pyproject.toml .
-
-# NOTE: if the Python version changes, this will need to be renamed to match
-# the CPython version it was built for.
-# This is not hard-coded in the pyproject.toml so that poetry can still
-# be used on the host machine, which won't have this .wheels directory.
-RUN poetry add \
-  .wheels/*
-
-RUN poetry install --no-dev
-
-ADD docker/start_server.sh .
-ADD doni ./doni
+#use venv from builder
+COPY --from=venv-builder $VIRTUAL_ENV $VIRTUAL_ENV
+COPY docker/start_server.sh .
+COPY doni ./doni
+COPY poetry.lock pyproject.toml ./
+RUN poetry install --no-dev -vvv
 
 EXPOSE 8001
 CMD [ "./start_server.sh" ]

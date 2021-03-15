@@ -32,6 +32,7 @@ jsonschema = "^3.2.0"
 jsonpatch = "^1.28"
 "oslo.reports" = "^2.2.0"
 futurist = "^2.3.0"
+netifaces = "^0.10.9"
 
 [tool.poetry.dev-dependencies]
 black = "^20.8b1"
