@@ -6,6 +6,9 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 ENV POETRY_VERSION=1.1.5
 RUN pip install "poetry==$POETRY_VERSION"
 
+# Don't buffer output to stdout
+ENV PYTHONUNBUFFERED=1
+
 # First stage to compile deps
 FROM python-base as venv-builder
 
