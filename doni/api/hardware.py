@@ -138,6 +138,16 @@ def get_all():
         "hardware": [serialize(hw) for hw in Hardware.list(ctx)],
     }
 
+@route("/export/", methods=["GET"], blueprint=bp)
+def export():
+    # ctx = request.context
+    # what should the shape of the data
+    # test to make sure private fields not returned
+    # make an anonymoyus request # check authorize calls should fail
+    serialize = hardware_serializer(with_private_fields=False)
+    return {
+        "hardware": [serialize(hw) for hw in Hardware.list(ctx)],
+    }
 
 @route("/<hardware_uuid>/", methods=["GET"], blueprint=bp)
 @args.validate(hardware_uuid=args.uuid)
