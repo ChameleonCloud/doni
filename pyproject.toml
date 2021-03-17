@@ -5,9 +5,7 @@
 line-length = 88
 
 [tool.poetry]
-authors = [
-  "Jason Anderson <jasonanderson@uchicago.edu>"
-]
+authors = ["Jason Anderson <jasonanderson@uchicago.edu>"]
 description = "Chameleon hardware registration and enrollment service"
 name = "doni"
 version = "0.0.1"
