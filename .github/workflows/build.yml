@@ -3,6 +3,11 @@ name: build and push container
 on:
   push:
     branches:
+      - "**"
+    tags:
+      - "v*"
+  pull_request:
+    branches:
       - "main"
 
 jobs:
@@ -10,10 +15,16 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOCKER_REGISTRY: docker.chameleoncloud.org
-      DOCKER_IMAGE: $(DOCKER_REGISTRY)/doni:latest
+      DOCKER_IMAGE: docker.chameleoncloud.org/doni
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: Docker meta
+        id: docker_meta
+        uses: crazy-max/ghaction-docker-meta@v1
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tag-sha: true
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - name: Cache Docker layers
@@ -24,6 +35,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
       - name: Login to Chameleon Repo
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v1
         with:
           registry: ${{ env.DOCKER_REGISTRY }}
@@ -34,8 +46,9 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          push: true
-          tags: ${{ env.DOCKER_IMAGE }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
       - name: Move cache
