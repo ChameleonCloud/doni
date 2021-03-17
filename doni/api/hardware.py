@@ -138,6 +138,7 @@ def get_all():
         "hardware": [serialize(hw) for hw in Hardware.list(ctx)],
     }
 
+
 @route("/export/", methods=["GET"], blueprint=bp)
 def export():
     ctx = request.context
