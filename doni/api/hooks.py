@@ -33,6 +33,11 @@ class AuthTokenFlaskMiddleware(object):
         })
 
     def before_request(self):
+        # skip on public routes
+        # TODO this is ugly.
+        if request.path == '/v1/hardware/export/':
+            return
+
         # When the middleware is invoked, it should mutate request.environ
         # and add 'keystone.auth_token' and 'keystone.auth_plugin' attributes.
         auth_token_request = _AuthTokenRequest(

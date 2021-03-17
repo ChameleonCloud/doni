@@ -2,20 +2,44 @@ from flask.testing import FlaskClient
 
 from doni.tests.unit import utils
 
+import pytest
 
-def test_export_hardware(
-    mocker, user_auth_headers, client: "FlaskClient", database: "utils.DBFixtures"
+
+def _test_validate_export(res):
+    # one hardware object
+    assert len(res.json["hardware"]) == 1
+
+    hw_item = res.json["hardware"][0]
+    assert hw_item["properties"] == {
+        "public-field": "fake-public-field",
+        "public-and-sensitive-field": "************",
+    }
+
+
+@pytest.mark.parametrize(
+    "use_headers",
+    [
+        pytest.param(True, id="auth"),
+        pytest.param(False, id="anonymous"),
+    ],
+)
+def test_export_hardware_public(
+    use_headers,
+    user_auth_headers,
+    mocker,
+    client: "FlaskClient",
+    database: "utils.DBFixtures",
 ):
     mock_authorize = mocker.patch("doni.api.hardware.authorize")
     hw = database.add_hardware()
-    res = client.get(f"/v1/hardware/export/", headers=user_auth_headers)
+    if use_headers:
+        headers = user_auth_headers
+    else:
+        headers = None
+    res = client.get(f"/v1/hardware/export/", headers=headers)
     assert res.status_code == 200
 
-    # What should this retun
-    # assert res.json == {
-    #     "availability": [],
-    # }
+    # this is a public endpoint, this should fail
+    mock_authorize.assert_not_called()
 
-    assert mock_authorize.called_once_with("hardware:get")
-    print(mock_authorize.calls)
-    raise Exception
+    _test_validate_export(res)

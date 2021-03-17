@@ -29,8 +29,9 @@ def get_test_hardware(**kw):
         "project_id": kw.get("project_id", "fake_project_id"),
         "properties": kw.get("properties", {
             "private-field": "fake-private-field",
-            "sensitive-field": "fake-sensitive-field",
             "private-and-sensitive-field": "fake-private-and-sensitive-field",
+            "public-field": "fake-public-field",
+            "public-and-sensitive-field": "fake-public-and-sensitive-field",
         }),
     }
 
