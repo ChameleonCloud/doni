@@ -35,7 +35,7 @@ class AuthTokenFlaskMiddleware(object):
     def before_request(self):
         # skip on public routes
         # TODO this is ugly.
-        if request.path == '/v1/hardware/export/':
+        if request.path == "/v1/hardware/export/":
             return
 
         # When the middleware is invoked, it should mutate request.environ
