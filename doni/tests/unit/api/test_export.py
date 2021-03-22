@@ -1,8 +1,6 @@
-from flask.testing import FlaskClient
-
-from doni.tests.unit import utils
-
 import pytest
+from doni.tests.unit import utils
+from flask.testing import FlaskClient
 
 
 def _test_validate_export(res):

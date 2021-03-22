@@ -1,14 +1,12 @@
 """Doni test utilities."""
 
-from oslo_utils import uuidutils
-from stevedore import extension
-from stevedore import named
-
-from doni.common import driver_factory
-from doni.common import exception
-from doni.db import api as db_api
-
 from typing import TYPE_CHECKING
+
+from doni.common import driver_factory, exception
+from doni.db import api as db_api
+from oslo_utils import uuidutils
+from stevedore import extension, named
+
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
@@ -27,16 +25,19 @@ def get_test_hardware(**kw):
         "uuid": kw.get("uuid", default_uuid),
         "hardware_type": kw.get("hardware_type", FAKE_HARDWARE_TYPE),
         "project_id": kw.get("project_id", "fake_project_id"),
-        "properties": kw.get("properties", {
-            "private-field": "fake-private-field",
-            "private-and-sensitive-field": "fake-private-and-sensitive-field",
-            "public-field": "fake-public-field",
-            "public-and-sensitive-field": "fake-public-and-sensitive-field",
-        }),
+        "properties": kw.get(
+            "properties",
+            {
+                "private-field": "fake-private-field",
+                "private-and-sensitive-field": "fake-private-and-sensitive-field",
+                "public-field": "fake-public-field",
+                "public-and-sensitive-field": "fake-public-and-sensitive-field",
+            },
+        ),
     }
 
 
-def mock_drivers(mocker: "MockerFixture", namespaces: dict=None):
+def mock_drivers(mocker: "MockerFixture", namespaces: dict = None):
     """Mock out drivers dynamically included via entry_points.
 
     This can be used to create one-off test drivers for hardware types or
@@ -63,8 +64,7 @@ def mock_drivers(mocker: "MockerFixture", namespaces: dict=None):
 
         drivers = namespaces[_namespace]
         extensions = [
-            extension.Extension(
-                name, entry_point=None, plugin=driver_class, obj=None)
+            extension.Extension(name, entry_point=None, plugin=driver_class, obj=None)
             for name, driver_class in drivers.items()
             # The caller will specify an allowlist of names to add to the
             # extension manager; ensure we respect this.
@@ -72,8 +72,8 @@ def mock_drivers(mocker: "MockerFixture", namespaces: dict=None):
         ]
         on_load_failure_callback = kwargs["on_load_failure_callback"]
         em = named.NamedExtensionManager.make_test_instance(
-            extensions, _namespace,
-            on_load_failure_callback=on_load_failure_callback)
+            extensions, _namespace, on_load_failure_callback=on_load_failure_callback
+        )
         # NOTE(jason): ``make_test_instance`` doesn't actually do anything with
         # the on_load_failure_callback, nor does it attempt to invoke the
         # entrypoints. So, we do a kludgy mimicry of this here.
@@ -84,13 +84,14 @@ def mock_drivers(mocker: "MockerFixture", namespaces: dict=None):
                 on_load_failure_callback(em, ext, exc)
         return em
 
-    (mocker.patch("doni.common.driver_factory._create_extension_manager")
-        .side_effect) = _create_extension_manager
+    (
+        mocker.patch("doni.common.driver_factory._create_extension_manager").side_effect
+    ) = _create_extension_manager
 
 
 class DBFixtures(object):
-    """A helper utility for setting up test data in the test DB.
-    """
+    """A helper utility for setting up test data in the test DB."""
+
     def __init__(self):
         self.db = db_api.get_instance()
         self._hardwares = []
@@ -123,11 +124,9 @@ class DBFixtures(object):
         Raises:
             ValueError: if a Hardware could not be found for the UUID.
         """
-        hw = next(
-            (hw for hw in self._hardwares if hw.uuid == hardware_uuid), None)
+        hw = next((hw for hw in self._hardwares if hw.uuid == hardware_uuid), None)
         if not hw:
-            raise ValueError(
-                f"Could not find Hardware {hardware_uuid} to delete")
+            raise ValueError(f"Could not find Hardware {hardware_uuid} to delete")
         self.db.destroy_hardware(hw.uuid)
         self._hardwares.remove(hw)
 
@@ -147,6 +146,7 @@ class DBFixtures(object):
 
 class MockResponse:
     """A simple class for mocking HTTP responses."""
+
     def __init__(self, status_code, body=None):
         self.status_code = status_code
         self.body = body

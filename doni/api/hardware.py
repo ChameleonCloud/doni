@@ -1,33 +1,39 @@
-from flask import Blueprint
-from flask import request
-
-from doni.api.hooks import route
 from doni.api import utils as api_utils
-from doni.common import args
-from doni.common import driver_factory
+from doni.api.hooks import route
+from doni.common import args, driver_factory
 from doni.common.policy import authorize
 from doni.objects import transaction
 from doni.objects.availability_window import AvailabilityWindow
 from doni.objects.hardware import Hardware
 from doni.objects.worker_task import WorkerTask
 from doni.worker import WorkerField
+from flask import Blueprint, request
 
 bp = Blueprint("hardware", __name__)
 
 
-DEFAULT_FIELDS = ('name', 'project_id', 'hardware_type', 'properties',)
-WORKER_TASK_DEFAULT_FIELDS = ('worker_type', 'state', 'state_details',)
+DEFAULT_FIELDS = (
+    "name",
+    "project_id",
+    "hardware_type",
+    "properties",
+)
+WORKER_TASK_DEFAULT_FIELDS = (
+    "worker_type",
+    "state",
+    "state_details",
+)
 
 HARDWARE_SCHEMA = {
-    'type': 'object',
-    'properties': {
-        'name': args.STRING,
-        'uuid': args.STRING,
-        'hardware_type': args.STRING,
-        'project_id': args.STRING,
-        'properties': {'type': 'object', 'additionalProperties': True},
+    "type": "object",
+    "properties": {
+        "name": args.STRING,
+        "uuid": args.STRING,
+        "hardware_type": args.STRING,
+        "project_id": args.STRING,
+        "properties": {"type": "object", "additionalProperties": True},
     },
-    'additionalProperties': False,
+    "additionalProperties": False,
 }
 
 
@@ -39,14 +45,8 @@ def hardware_validator():
     for hwt_name, hwt in enabled_hardware_types.items():
         properties_schema = {
             "type": "object",
-            "properties": {
-                field.name: field.schema
-                for field in hwt.default_fields
-            },
-            "required": [
-                field.name for field in hwt.default_fields
-                if field.required
-            ],
+            "properties": {field.name: field.schema for field in hwt.default_fields},
+            "required": [field.name for field in hwt.default_fields if field.required],
             # Disallow keys that don't match any worker
             "additionalProperties": False,
         }
@@ -61,24 +61,24 @@ def hardware_validator():
         if not properties_schema["required"]:
             del properties_schema["required"]
 
-        hardware_type_schemas.append({
-            "type": "object",
-            "properties": {
-                "hardware_type": {"const": hwt_name},
-                "properties": properties_schema,
+        hardware_type_schemas.append(
+            {
+                "type": "object",
+                "properties": {
+                    "hardware_type": {"const": hwt_name},
+                    "properties": properties_schema,
+                },
             }
-        })
+        )
 
     schema = {
-        "definitions": {
-            "hardware": HARDWARE_SCHEMA
-        },
+        "definitions": {"hardware": HARDWARE_SCHEMA},
         "allOf": [
             # Check base hardware schema
             {"$ref": "#/definitions/hardware"},
             # Check schema for hardware types
             {"oneOf": hardware_type_schemas},
-        ]
+        ],
     }
 
     return args.schema(schema)
@@ -121,7 +121,8 @@ def hardware_serializer(with_private_fields=False):
                     # Don't serialize 'None'
                     continue
                 filtered_properties[field.name] = (
-                    _mask_sensitive(value) if field.sensitive else value)
+                    _mask_sensitive(value) if field.sensitive else value
+                )
 
         hardware_json["properties"] = filtered_properties
         return hardware_json
@@ -147,6 +148,7 @@ def export():
         "hardware": [serialize(hw) for hw in Hardware.list(ctx)],
     }
 
+
 @route("/<hardware_uuid>/", methods=["GET"], blueprint=bp)
 @args.validate(hardware_uuid=args.uuid)
 def get_one(hardware_uuid=None):
@@ -161,7 +163,7 @@ def get_one(hardware_uuid=None):
             include_created_at=False,
             include_updated_at=False,
             include_uuid=False,
-            fields=WORKER_TASK_DEFAULT_FIELDS
+            fields=WORKER_TASK_DEFAULT_FIELDS,
         )
         for wt in WorkerTask.list_for_hardware(ctx, hardware_uuid)
     ]
@@ -207,7 +209,8 @@ def update(hardware_uuid=None, patch=None):
 
         if "availability" in patched_state:
             to_add, to_update, to_remove = api_utils.apply_patch_updates_to_list(
-                state["availability"], patched_state["availability"])
+                state["availability"], patched_state["availability"]
+            )
             for window in to_add:
                 window.create()
             for window in to_update:
