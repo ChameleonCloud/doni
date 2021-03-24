@@ -1,6 +1,6 @@
+import traceback
 from functools import wraps
 from typing import TYPE_CHECKING
-import traceback
 
 from doni.api.utils import make_error_response
 from doni.common import context as doni_context
