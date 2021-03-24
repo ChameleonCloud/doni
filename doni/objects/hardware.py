@@ -1,10 +1,9 @@
-from oslo_versionedobjects import fields as ovo_fields
+from typing import TYPE_CHECKING
 
 from doni.db import api as db_api
 from doni.objects import base
 from doni.objects import fields as object_fields
-
-from typing import TYPE_CHECKING
+from oslo_versionedobjects import fields as ovo_fields
 
 if TYPE_CHECKING:
     from doni.common.context import RequestContext
@@ -68,25 +67,6 @@ class Hardware(base.DoniObject):
         """
         self.dbapi.destroy_hardware(self.uuid)
         self.obj_reset_changes()
-
-    @classmethod
-    def get_by_id(cls, context: "RequestContext", hardware_id: int) -> "Hardware":
-        """Find a hardware based on its integer ID.
-
-        Args:
-            context (RequestContext): security context.
-            hardware_id (int): The ID of a hardware.
-
-        Returns:
-            A :class:`Hardware` object.
-
-        Raises:
-            HardwareNotFound: if the hardware no longer appears in the database.
-        """
-        db_hardware = cls.dbapi.get_hardware_by_id(hardware_id)
-        obj = cls()
-        hardware = cls._from_db_object(context, obj, db_hardware)
-        return hardware
 
     @classmethod
     def get_by_uuid(cls, context: "RequestContext", uuid: str) -> "Hardware":

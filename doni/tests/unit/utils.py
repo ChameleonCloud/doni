@@ -21,6 +21,8 @@ def get_test_hardware(**kw):
     return {
         "created_at": kw.get("created_at"),
         "updated_at": kw.get("updated_at"),
+        "deleted": kw.get("deleted"),
+        "deleted_at": kw.get("deleted_at"),
         "id": kw.get("id", 234),
         "name": kw.get("name", "fake_name"),
         "uuid": kw.get("uuid", default_uuid),

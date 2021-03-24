@@ -1,27 +1,25 @@
 import threading
+from typing import TYPE_CHECKING
 
+import oslo_db
+import sqlalchemy as sa
+from doni.common import driver_factory, exception
+from doni.conf import CONF
+from doni.db import models
+from doni.worker import WorkerState
 from oslo_db import api as oslo_db_api
 from oslo_db import exception as db_exc
-import oslo_db
 from oslo_db.sqlalchemy import enginefacade
 from oslo_db.sqlalchemy import utils as db_utils
 from oslo_log import log
 from oslo_utils import uuidutils
 from osprofiler import sqlalchemy as osp_sqlalchemy
-import sqlalchemy as sa
 from sqlalchemy.orm.exc import NoResultFound
 
-from doni.common import driver_factory
-from doni.common import exception
-from doni.conf import CONF
-from doni.db import models
-from doni.worker import WorkerState
-
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
-    from sqlalchemy.orm.session import Session
     from typing import ContextManager
+
+    from sqlalchemy.orm.session import Session
 
 LOG = log.getLogger(__name__)
 
@@ -123,6 +121,10 @@ class Connection(object):
                 raise exception.HardwareAlreadyExists(uuid=values["uuid"])
         return hardware
 
+    @staticmethod
+    def _hardware_by_uuid(session, hardware_uuid: str):
+        return session.query(models.Hardware).filter_by(uuid=hardware_uuid, deleted=0)
+
     @oslo_db_api.retry_on_deadlock
     def update_hardware(self, hardware_uuid: str, values: dict) -> "models.Hardware":
         if "uuid" in values:
@@ -130,7 +132,7 @@ class Connection(object):
             raise exception.InvalidParameterValue(msg=msg)
 
         with _session_for_write() as session:
-            query = session.query(models.Hardware).filter_by(uuid=hardware_uuid)
+            query = self._hardware_by_uuid(session, hardware_uuid)
             try:
                 count = query.update(values)
                 if count != 1:
@@ -144,30 +146,20 @@ class Connection(object):
     @oslo_db_api.retry_on_deadlock
     def destroy_hardware(self, hardware_uuid: str):
         with _session_for_write() as session:
-            query = session.query(models.Hardware).filter_by(uuid=hardware_uuid)
+            query = self._hardware_by_uuid(session, hardware_uuid)
             try:
-                _ = query.one()
+                hardware = query.one()
+                hardware.soft_delete(session)
             except NoResultFound:
                 raise exception.HardwareNotFound(hardware=hardware_uuid)
 
-            # NOTE: any attached relations that should be cascade-deleted should
-            # be deleted here, before the parent Hardware record is deleted.
-
-            query.delete()
-
-    def get_hardware_by_id(self, hardware_id) -> "models.Hardware":
-        query = model_query(models.Hardware).filter_by(id=hardware_id)
-        try:
-            return query.one()
-        except NoResultFound:
-            raise exception.HardwareNotFound(hardware=hardware_id)
-
     def get_hardware_by_uuid(self, hardware_uuid: str) -> "models.Hardware":
-        query = model_query(models.Hardware).filter_by(uuid=hardware_uuid)
-        try:
-            return query.one()
-        except NoResultFound:
-            raise exception.HardwareNotFound(hardware=hardware_uuid)
+        with _session_for_read() as session:
+            query = self._hardware_by_uuid(session, hardware_uuid)
+            try:
+                return query.one()
+            except NoResultFound:
+                raise exception.HardwareNotFound(hardware=hardware_uuid)
 
     def get_hardware_by_name(self, hardware_name: str) -> "models.Hardware":
         query = model_query(models.Hardware).filter_by(name=hardware_name)
@@ -179,7 +171,15 @@ class Connection(object):
     def get_hardware_list(
         self, limit=None, marker=None, sort_key=None, sort_dir=None
     ) -> "list[models.Hardware]":
-        return _paginate_query(models.Hardware, limit, marker, sort_key, sort_dir)
+        query = model_query(models.Hardware).filter_by(deleted=0)
+        return _paginate_query(
+            models.Hardware,
+            limit,
+            marker,
+            sort_key,
+            sort_dir,
+            query=query,
+        )
 
     def get_hardware_availability_window_list(
         self, hardware_uuid: str

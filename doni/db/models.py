@@ -39,7 +39,7 @@ class DoniBase(models.TimestampMixin, models.ModelBase):
 Base = declarative_base(cls=DoniBase)
 
 
-class Hardware(Base):
+class Hardware(models.SoftDeleteMixin, Base):
     __tablename__ = "hardware"
     __table_args__ = (
         schema.UniqueConstraint("uuid", name="uniq_hardware0uuid"),
@@ -57,7 +57,7 @@ class Hardware(Base):
     )
 
 
-class WorkerTask(Base):
+class WorkerTask(models.SoftDeleteMixin, Base):
     __tablename__ = "worker_task"
     __table_args__ = (
         schema.UniqueConstraint("uuid", name="uniq_workers0uuid"),
