@@ -9,6 +9,9 @@ from doni.worker import WorkerResult
 from keystoneauth1 import loading as ks_loading
 from oslo_utils import uuidutils
 
+TEST_STATE_DETAILS = {
+    "blazar_host_id": "1",
+}
 TEST_BLAZAR_HOST_ID = "1"
 TEST_HARDWARE_UUID = uuidutils.generate_uuid()
 
@@ -67,7 +70,8 @@ def get_fake_hardware(database: "utils.DBFixtures"):
     return Hardware(**db_hw)
 
 
-def get_fake_blazar(mocker, request_fn):
+def get_mocked_blazar(mocker, request_fn):
+    """Patch method to mock blazar client."""
     mock_adapter = mock.MagicMock()
     mock_request = mock_adapter.request
     mock_request.side_effect = request_fn
@@ -80,18 +84,60 @@ def get_fake_blazar(mocker, request_fn):
 def test_create_new_physical_host(
     mocker,
     admin_context: "RequestContext",
-    blazar_worker: "BlazarWorker",
+    blazar_worker: "BlazarPhysicalHostWorker",
     database: "utils.DBFixtures",
 ):
+    """Test creation of a new physical host in blazar.
+
+    This tests creation of a new host, when it doesn't exist already
+    """
+
     def _fake_blazar_for_create(path, method=None, json=None, **kwargs):
-        if method == "get" and path == f"v1/os-hosts/{TEST_BLAZAR_HOST_ID}":
+        if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+            # Return 404 because this host shouldn't exist yet.
             return utils.MockResponse(404)
         elif method == "post" and path == f"/os-hosts":
+            # assume that creation succeeds, return created time
             assert json["name"] == "compute-1"
             return utils.MockResponse(201, {"created_at": "fake-created_at"})
         raise NotImplementedError("Unexpected request signature")
 
-    fake_blazar = get_fake_blazar(mocker, _fake_blazar_for_create)
-    result = blazar_worker.process(admin_context, get_fake_hardware(database), {})
+    fake_blazar = get_mocked_blazar(mocker, _fake_blazar_for_create)
+    result = blazar_worker.process(
+        context=admin_context,
+        hardware=get_fake_hardware(database),
+        state_details={},
+    )
 
     assert isinstance(result, WorkerResult.Success)
+    assert result.payload == {"created_at": "fake-created_at"}
+    assert fake_blazar.call_count == 1
+
+
+def test_update_existing_physical_host(
+    mocker,
+    admin_context: "RequestContext",
+    blazar_worker: "BlazarPhysicalHostWorker",
+    database: "utils.DBFixtures",
+):
+    """Test update of an existing physical host in blazar."""
+
+    def _fake_blazar_for_update(path, method=None, json=None, **kwargs):
+        if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+            return utils.MockResponse(200)
+        elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+            # assume that creation succeeds, return created time
+            assert json["name"] == "compute-1"
+            return utils.MockResponse(201, {"updated_at": "fake-updated_at"})
+        raise NotImplementedError("Unexpected request signature")
+
+    fake_blazar = get_mocked_blazar(mocker, _fake_blazar_for_update)
+    result = blazar_worker.process(
+        context=admin_context,
+        hardware=get_fake_hardware(database),
+        state_details=TEST_STATE_DETAILS,
+    )
+
+    assert isinstance(result, WorkerResult.Success)
+    assert result.payload == {"updated_at": "fake-updated_at"}
+    assert fake_blazar.call_count == 1

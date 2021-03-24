@@ -72,26 +72,36 @@ class BlazarPhysicalHostWorker(BaseWorker):
         availability_windows: "list[AvailabilityWindow]" = None,
         state_details: "dict" = {},
     ) -> "WorkerResult.Base":
+        """Main loop for Blazar sync worker.
 
-        host_id = state_details.get("blazar_host_id")
-
+        This method ensures that an up-to-date blazar host object exists for
+        each physical host in Doni's DB.
+        """
         desired_state = {
             # what data does blazar contain
             "name": "compute-1",
             "extra_capability_sample": "foo",
         }
-
         request_body = desired_state
 
+        # If we know the host_id, then update that host.
+        # If we don't then attempt to create it
+        host_id = state_details.get("blazar_host_id")
         if host_id:
-            existing = _call_blazar(
+            host = _call_blazar(
                 context,
                 f"/os-hosts/{host_id}",
-                method="get",
-                allowed_status_codes=[404],
+                method="put",
+                json=request_body,
             )
+            return WorkerResult.Success({"updated_at": host["updated_at"]})
         else:
-            host = _call_blazar(context, f"/os-hosts", method="post", json=request_body)
+            host = _call_blazar(
+                context,
+                f"/os-hosts",
+                method="post",
+                json=request_body,
+            )
             return WorkerResult.Success({"created_at": host["created_at"]})
 
 
