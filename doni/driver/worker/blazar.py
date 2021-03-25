@@ -76,13 +76,22 @@ class BlazarPhysicalHostWorker(BaseWorker):
 
         This method ensures that an up-to-date blazar host object exists for
         each physical host in Doni's DB.
+
+        The format of Blazar's data currently must match the G5K checks data.
+        The only "mandatory" key is name, but Chameleon depends a subset of g5k
+        for reservations.
         """
-        desired_state = {
-            # what data does blazar contain
-            "name": "compute-1",
-            "extra_capability_sample": "foo",
+        hw_props = hardware.properties
+        request_body = {
+            "name": hardware.name,
+            "node_name": hardware.name,
+            "uid": hardware.uuid,
+            "node_type": hw_props.get("node_type"),
+            "placement": {
+                "node": hw_props.get("node"),
+                "rack": hw_props.get("rack"),
+            },
         }
-        request_body = desired_state
 
         # If we know the host_id, then update that host.
         # If we don't then attempt to create it
@@ -102,6 +111,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 method="post",
                 json=request_body,
             )
+            state_details["id"] = host.get("id")
             return WorkerResult.Success({"created_at": host["created_at"]})
 
 

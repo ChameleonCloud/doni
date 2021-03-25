@@ -98,7 +98,7 @@ def test_create_new_physical_host(
             return utils.MockResponse(404)
         elif method == "post" and path == f"/os-hosts":
             # assume that creation succeeds, return created time
-            assert json["name"] == "compute-1"
+            assert json["node_name"] == "fake_name_1"
             return utils.MockResponse(201, {"created_at": "fake-created_at"})
         raise NotImplementedError("Unexpected request signature")
 
@@ -127,7 +127,7 @@ def test_update_existing_physical_host(
             return utils.MockResponse(200)
         elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
             # assume that creation succeeds, return created time
-            assert json["name"] == "compute-1"
+            assert json["node_name"] == "fake_name_1"
             return utils.MockResponse(201, {"updated_at": "fake-updated_at"})
         raise NotImplementedError("Unexpected request signature")
 
