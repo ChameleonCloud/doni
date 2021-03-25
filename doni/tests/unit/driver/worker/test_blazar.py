@@ -2,18 +2,21 @@ from typing import TYPE_CHECKING
 from unittest import mock
 
 import pytest
+from keystoneauth1 import loading as ks_loading
+from oslo_utils import uuidutils
+
 from doni.driver.worker.blazar import BlazarPhysicalHostWorker
+from doni.objects.availability_window import AvailabilityWindow
 from doni.objects.hardware import Hardware
 from doni.tests.unit import utils
 from doni.worker import WorkerResult
-from keystoneauth1 import loading as ks_loading
-from oslo_utils import uuidutils
 
 TEST_STATE_DETAILS = {
     "blazar_host_id": "1",
 }
 TEST_BLAZAR_HOST_ID = "1"
 TEST_HARDWARE_UUID = uuidutils.generate_uuid()
+TEST_LEASE_UUID = uuidutils.generate_uuid()
 
 if TYPE_CHECKING:
     from doni.common.context import RequestContext
@@ -92,7 +95,7 @@ def test_create_new_physical_host(
     This tests creation of a new host, when it doesn't exist already
     """
 
-    def _fake_blazar_for_create(path, method=None, json=None, **kwargs):
+    def _stub_blazar_request(path, method=None, json=None, **kwargs):
         if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
             # Return 404 because this host shouldn't exist yet.
             return utils.MockResponse(404)
@@ -102,7 +105,7 @@ def test_create_new_physical_host(
             return utils.MockResponse(201, {"created_at": "fake-created_at"})
         raise NotImplementedError("Unexpected request signature")
 
-    fake_blazar = get_mocked_blazar(mocker, _fake_blazar_for_create)
+    blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
     result = blazar_worker.process(
         context=admin_context,
         hardware=get_fake_hardware(database),
@@ -110,8 +113,8 @@ def test_create_new_physical_host(
     )
 
     assert isinstance(result, WorkerResult.Success)
-    assert result.payload == {"created_at": "fake-created_at"}
-    assert fake_blazar.call_count == 1
+    assert result.payload.get("created_at") == "fake-created_at"
+    assert blazar_request.call_count == 1
 
 
 def test_update_existing_physical_host(
@@ -122,7 +125,7 @@ def test_update_existing_physical_host(
 ):
     """Test update of an existing physical host in blazar."""
 
-    def _fake_blazar_for_update(path, method=None, json=None, **kwargs):
+    def _stub_blazar_request(path, method=None, json=None, **kwargs):
         if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
             return utils.MockResponse(200)
         elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
@@ -131,7 +134,7 @@ def test_update_existing_physical_host(
             return utils.MockResponse(201, {"updated_at": "fake-updated_at"})
         raise NotImplementedError("Unexpected request signature")
 
-    fake_blazar = get_mocked_blazar(mocker, _fake_blazar_for_update)
+    blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
     result = blazar_worker.process(
         context=admin_context,
         hardware=get_fake_hardware(database),
@@ -139,5 +142,40 @@ def test_update_existing_physical_host(
     )
 
     assert isinstance(result, WorkerResult.Success)
-    assert result.payload == {"updated_at": "fake-updated_at"}
-    assert fake_blazar.call_count == 1
+    assert result.payload.get("updated_at") == "fake-updated_at"
+    assert blazar_request.call_count == 1
+
+
+def test_create_new_lease(
+    mocker,
+    admin_context: "RequestContext",
+    blazar_worker: "BlazarPhysicalHostWorker",
+    database: "utils.DBFixtures",
+):
+    """Test creation of new lease for part-time resources."""
+
+    def _stub_blazar_request(path, method=None, json=None, **kwargs):
+        if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+            return utils.MockResponse(200)
+        elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+            return utils.MockResponse(201, {"updated_at": "fake-updated_at"})
+        elif method == "get" and path == f"/leases/{TEST_LEASE_UUID}":
+            return utils.MockResponse(404)
+        elif method == "post" and path == f"/leases":
+            return utils.MockResponse(201)
+        raise NotImplementedError("Unexpected request signature")
+
+    hw_obj = get_fake_hardware(database)
+    fake_window = database.add_availability_window(hardware_uuid=hw_obj.uuid)
+    aw_obj = AvailabilityWindow(**fake_window)
+
+    blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
+    result = blazar_worker.process(
+        context=admin_context,
+        hardware=hw_obj,
+        availability_windows=[aw_obj],
+        state_details=TEST_STATE_DETAILS,
+    )
+
+    assert isinstance(result, WorkerResult.Success)
+    assert blazar_request.call_count == 2

@@ -77,15 +77,16 @@ class BlazarPhysicalHostWorker(BaseWorker):
         This method ensures that an up-to-date blazar host object exists for
         each physical host in Doni's DB.
 
-        The format of Blazar's data currently must match the G5K checks data.
-        The only "mandatory" key is name, but Chameleon depends a subset of g5k
-        for reservations.
+        "name" must match the name used by nova to identify the node. In our case
+        it is the hardware uuid, as that is what ironic is passing to nova.
+        blazar uses nova.get_servers_per_host to check if there is an existing
+        server with that name.
         """
         hw_props = hardware.properties
-        request_body = {
-            "name": hardware.name,
-            "node_name": hardware.name,
+        host_request_body = {
+            "name": hardware.uuid,
             "uid": hardware.uuid,
+            "node_name": hardware.name,
             "node_type": hw_props.get("node_type"),
             "placement": {
                 "node": hw_props.get("node"),
@@ -95,24 +96,52 @@ class BlazarPhysicalHostWorker(BaseWorker):
 
         # If we know the host_id, then update that host.
         # If we don't then attempt to create it
+        # we'll always "touch" the host, because we can't tell if this was a host
+        # or a lease update request yet.
+        result = {}
+
         host_id = state_details.get("blazar_host_id")
         if host_id:
             host = _call_blazar(
                 context,
                 f"/os-hosts/{host_id}",
                 method="put",
-                json=request_body,
+                json=host_request_body,
             )
-            return WorkerResult.Success({"updated_at": host["updated_at"]})
+            result["updated_at"] = host.get("updated_at")
         else:
             host = _call_blazar(
                 context,
                 f"/os-hosts",
                 method="post",
-                json=request_body,
+                json=host_request_body,
             )
             state_details["id"] = host.get("id")
-            return WorkerResult.Success({"created_at": host["created_at"]})
+            result["created_at"] = host.get("created_at")
+
+        for aw in availability_windows or []:
+            request_body = {
+                "name": aw.uuid,
+                "start_date": aw.start,
+                "end_date": aw.end,
+                "reservations": [
+                    {
+                        "resource_type": "physical:host",
+                        "min": 1,
+                        "max": 1,
+                        "hypervisor_properties": None,
+                        "resource_properties": '["=","$uid",{aw.hardware_uuid}]',
+                    },
+                ],
+            }
+            aw_response = _call_blazar(
+                context,
+                f"/leases",
+                method="post",
+                json=request_body,
+            )
+
+        return WorkerResult.Success(result)
 
 
 def _call_blazar(context, path, method="get", json=None, allowed_status_codes=[]):
