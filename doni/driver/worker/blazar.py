@@ -1,3 +1,4 @@
+"""Sync worker to update Blazar from Doni."""
 from textwrap import shorten
 from typing import TYPE_CHECKING
 
@@ -83,7 +84,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
         server with that name.
         """
         hw_props = hardware.properties
-        host_request_body = {
+        info_to_set = {
             "name": hardware.uuid,
             "uid": hardware.uuid,
             "node_name": hardware.name,
@@ -102,22 +103,28 @@ class BlazarPhysicalHostWorker(BaseWorker):
 
         host_id = state_details.get("blazar_host_id")
         if host_id:
-            host = _call_blazar(
+            # Always try to update the host in blazar. We could add a precondition
+            # header based on e.g. timestamp if needed.
+            update = _call_blazar(
                 context,
                 f"/os-hosts/{host_id}",
                 method="put",
-                json=host_request_body,
+                json=info_to_set,
+                allowed_status_codes=[200],
             )
-            result["updated_at"] = host.get("updated_at")
+            result["host_updated_at"] = update.get("updated_at")
         else:
+            # We don't have a cached host_id, try to create a host. If the host exists,
+            # blazar will match the uuid, and the request will fail.
             host = _call_blazar(
                 context,
                 f"/os-hosts",
                 method="post",
-                json=host_request_body,
+                json=info_to_set,
+                allowed_status_codes=[201],
             )
             state_details["id"] = host.get("id")
-            result["created_at"] = host.get("created_at")
+            result["host_created_at"] = host.get("created_at")
 
         for aw in availability_windows or []:
             request_body = {
@@ -134,12 +141,32 @@ class BlazarPhysicalHostWorker(BaseWorker):
                     },
                 ],
             }
-            aw_response = _call_blazar(
+
+            lease = _call_blazar(
                 context,
-                f"/leases",
-                method="post",
-                json=request_body,
+                f"/leases/{aw.uuid}",
+                method="get",
+                allowed_status_codes=[200, 404],
             )
+            if lease:
+                if not (aw.fields.items() <= lease.items()):
+                    update = _call_blazar(
+                        context,
+                        f"/leases/{aw.uuid}",
+                        method="put",
+                        json=request_body,
+                        allowed_status_codes=[200],
+                    )
+                    result["lease_updated_at"] = update.get("updated_at")
+            else:
+                lease = _call_blazar(
+                    context,
+                    f"/leases",
+                    method="post",
+                    json=request_body,
+                    allowed_status_codes=[201],
+                )
+                result["lease_created_at"] = lease.get("created_at")
 
         return WorkerResult.Success(result)
 
