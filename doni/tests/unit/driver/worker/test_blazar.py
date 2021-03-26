@@ -84,6 +84,24 @@ def get_mocked_blazar(mocker, request_fn):
     return mock_request
 
 
+def _stub_blazar_host_new(path, method, json):
+    if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+        # Return 404 because this host shouldn't exist yet.
+        return utils.MockResponse(404)
+    elif method == "post" and path == f"/os-hosts":
+        # assume that creation succeeds, return created time
+        assert json["node_name"] == "fake_name_1"
+        return utils.MockResponse(201, {"created_at": "fake-created_at"})
+
+
+def _stub_blazar_host_exist(path, method, json):
+    if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+        return utils.MockResponse(200)
+    elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+        assert json["node_name"] == "fake_name_1"
+        return utils.MockResponse(201, {"updated_at": "fake-updated_at"})
+
+
 def test_create_new_physical_host(
     mocker,
     admin_context: "RequestContext",
@@ -96,13 +114,9 @@ def test_create_new_physical_host(
     """
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
-        if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
-            # Return 404 because this host shouldn't exist yet.
-            return utils.MockResponse(404)
-        elif method == "post" and path == f"/os-hosts":
-            # assume that creation succeeds, return created time
-            assert json["node_name"] == "fake_name_1"
-            return utils.MockResponse(201, {"created_at": "fake-created_at"})
+        host_response = _stub_blazar_host_new(path, method, json)
+        if host_response:
+            return host_response
         raise NotImplementedError("Unexpected request signature")
 
     blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
@@ -126,12 +140,11 @@ def test_update_existing_physical_host(
     """Test update of an existing physical host in blazar."""
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
-        if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
-            return utils.MockResponse(200)
-        elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
-            # assume that creation succeeds, return created time
-            assert json["node_name"] == "fake_name_1"
-            return utils.MockResponse(201, {"updated_at": "fake-updated_at"})
+        host_response = _stub_blazar_host_exist(path, method, json)
+        if host_response:
+            return host_response
+        raise NotImplementedError("Unexpected request signature")
+
         raise NotImplementedError("Unexpected request signature")
 
     blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
@@ -146,6 +159,13 @@ def test_update_existing_physical_host(
     assert blazar_request.call_count == 1
 
 
+def _stub_blazar_lease_new(path, method, json):
+    if method == "get" and path == f"/leases/{TEST_LEASE_UUID}":
+        return utils.MockResponse(404)
+    elif method == "post" and path == f"/leases":
+        return utils.MockResponse(201)
+
+
 def test_create_new_lease(
     mocker,
     admin_context: "RequestContext",
@@ -155,14 +175,12 @@ def test_create_new_lease(
     """Test creation of new lease for part-time resources."""
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
-        if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
-            return utils.MockResponse(200)
-        elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
-            return utils.MockResponse(201, {"updated_at": "fake-updated_at"})
-        elif method == "get" and path == f"/leases/{TEST_LEASE_UUID}":
-            return utils.MockResponse(404)
-        elif method == "post" and path == f"/leases":
-            return utils.MockResponse(201)
+        host_response = _stub_blazar_host_exist(path, method, json)
+        lease_response = _stub_blazar_lease_new(path, method, json)
+        if host_response:
+            return host_response
+        elif lease_response:
+            return lease_response
         raise NotImplementedError("Unexpected request signature")
 
     hw_obj = get_fake_hardware(database)
