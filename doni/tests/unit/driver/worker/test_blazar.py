@@ -101,6 +101,11 @@ def _stub_blazar_host_exist(path, method, json):
     elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
         assert json["node_name"] == "fake_name_1"
         return utils.MockResponse(201, {"updated_at": "fake-updated_at"})
+    elif method == "post" and path == f"/os-hosts":
+        # TODO Is this true?
+        return utils.MockResponse(
+            409, {"created_at": "fake-created_at", "name": "{TEST_BLAZAR_HOST_ID}"}
+        )
 
 
 def test_create_new_physical_host(
@@ -116,6 +121,35 @@ def test_create_new_physical_host(
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
         host_response = _stub_blazar_host_new(path, method, json)
+        if host_response:
+            return host_response
+        raise NotImplementedError("Unexpected request signature")
+
+    blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
+    result = blazar_worker.process(
+        context=admin_context,
+        hardware=get_fake_hardware(database),
+        state_details={},
+    )
+
+    assert isinstance(result, WorkerResult.Success)
+    assert result.payload.get("host_created_at") == "fake-created_at"
+    assert blazar_request.call_count == 1
+
+
+def test_create_duplicate_physical_host(
+    mocker,
+    admin_context: "RequestContext",
+    blazar_worker: "BlazarPhysicalHostWorker",
+    database: "utils.DBFixtures",
+):
+    """Test creation of a new physical host in blazar.
+
+    This tests creation of a new host, when it doesn't exist already
+    """
+
+    def _stub_blazar_request(path, method=None, json=None, **kwargs):
+        host_response = _stub_blazar_host_exist(path, method, json)
         if host_response:
             return host_response
         raise NotImplementedError("Unexpected request signature")

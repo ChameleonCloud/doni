@@ -121,7 +121,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 f"/os-hosts",
                 method="post",
                 json=info_to_set,
-                allowed_status_codes=[201],
+                allowed_status_codes=[201, 409],
             )
             state_details["id"] = host.get("id")
             result["host_created_at"] = host.get("created_at")
