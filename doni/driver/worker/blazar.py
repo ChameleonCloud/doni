@@ -1,4 +1,5 @@
 """Sync worker to update Blazar from Doni."""
+from functools import wraps
 from textwrap import shorten
 from typing import TYPE_CHECKING
 
@@ -55,6 +56,19 @@ class BlazarNodeProvisionStateTimeout(exception.DoniException):
     )
 
 
+def _defer_on_node_locked(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except BlazarAPIError as exc:
+            if exc.code == 409:
+                return WorkerResult.Defer({"message": "Node is locked by ironic."})
+            raise
+
+    return wrapper
+
+
 class BlazarPhysicalHostWorker(BaseWorker):
     opts = []
     opt_group = "blazar"
@@ -66,6 +80,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
     def list_opts(self):
         return auth_conf.add_auth_opts(self.opts, service_type="reservation")
 
+    @_defer_on_node_locked
     def process(
         self,
         context: "RequestContext",
