@@ -1,4 +1,5 @@
 """Unit tests for blazar sync worker."""
+import json
 from typing import TYPE_CHECKING
 from unittest import mock
 
@@ -217,6 +218,24 @@ def test_update_existing_physical_host(
     assert blazar_request.call_count == 1
 
 
+def _aw_lease_dict(aw: AvailabilityWindow) -> dict:
+    aw_dict = {
+        "name": f"availability_window_{aw.uuid}",
+        "start_date": aw.start.isoformat(),
+        "end_date": aw.end.isoformat(),
+        "reservations": [
+            {
+                "resource_type": "physical:host",
+                "min": 1,
+                "max": 1,
+                "hypervisor_properties": None,
+                "resource_properties": '["=","$uid",{aw.hardware_uuid}]',
+            },
+        ],
+    }
+    return aw_dict
+
+
 def test_create_new_lease(
     mocker,
     admin_context: "RequestContext",
@@ -290,4 +309,67 @@ def test_update_lease(
     assert isinstance(result, WorkerResult.Success)
 
     # 1 call to hosts path, 2 calls to leases
+    assert blazar_request.call_count == 3
+
+
+def test_delete_lease(
+    mocker,
+    admin_context: "RequestContext",
+    blazar_worker: "BlazarPhysicalHostWorker",
+    database: "utils.DBFixtures",
+):
+    """Test deletion of an existing lease.
+
+    This case assumes:
+    1. A lease was created, matching the UUID of an availability window.
+    2. That availability window was then removed.
+    3. Any lease with a name not matching an availability window should be removed.
+    4. TODO: how is this filtered so as not to remove all leases!
+    """
+    hw_obj = get_fake_hardware(database)
+
+    aw_list = []
+    aw_dict = {}
+
+    for i in range(0, 2):
+        fake_window = database.add_availability_window(hardware_uuid=hw_obj.uuid)
+        aw_obj = AvailabilityWindow(**fake_window)
+        # Create list to pass to blazar call
+        aw_list.append(aw_obj)
+        # add to dict, for use in mocked response
+        aw_dict[f"/leases/{aw_obj.uuid}"] = _aw_lease_dict(aw_obj)
+
+    def _stub_blazar_request(path, method=None, json=None, **kwargs):
+        print(f"path: {path}; method: {method}")
+        host_response = _stub_blazar_host_exist(path, method, json)
+        if host_response:
+            return host_response
+        elif method == "get":
+            if path == "/leases":
+                return utils.MockResponse(200, aw_dict)
+            elif path in aw_dict.keys():
+                return utils.MockResponse(200, aw_dict.get(path))
+            else:
+                return utils.MockResponse(404)
+        elif method == "put" and path in aw_dict.keys():
+            print(aw_dict.get(path))
+            return utils.MockResponse(200, aw_dict.get(path))
+        elif method == "delete":
+            if path in aw_dict.keys():
+                return utils.MockResponse(204)
+            else:
+                return utils.MockResponse(404)
+        else:
+            raise NotImplementedError("Unexpected request signature")
+
+    blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
+    result = blazar_worker.process(
+        context=admin_context,
+        hardware=hw_obj,
+        availability_windows=aw_list,
+        state_details=TEST_STATE_DETAILS,
+    )
+
+    assert isinstance(result, WorkerResult.Success)
+
     assert blazar_request.call_count == 3

@@ -142,10 +142,10 @@ class BlazarPhysicalHostWorker(BaseWorker):
             result["host_created_at"] = host.get("created_at")
 
         for aw in availability_windows or []:
-            request_body = {
-                "name": aw.uuid,
-                "start_date": aw.start,
-                "end_date": aw.end,
+            aw_dict = {
+                "name": f"availability_window_{aw.uuid}",
+                "start_date": aw.start.isoformat(),
+                "end_date": aw.end.isoformat(),
                 "reservations": [
                     {
                         "resource_type": "physical:host",
@@ -157,6 +157,8 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 ],
             }
 
+            request_body = aw_dict
+
             lease = _call_blazar(
                 context,
                 f"/leases/{aw.uuid}",
@@ -164,7 +166,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 allowed_status_codes=[200, 404],
             )
             if lease:
-                if not (aw.fields.items() <= lease.items()):
+                if not (aw_dict.items() <= lease.items()):
                     update = _call_blazar(
                         context,
                         f"/leases/{aw.uuid}",
