@@ -152,7 +152,6 @@ class BlazarPhysicalHostWorker(BaseWorker):
                     allowed_status_codes=[200],
                 )
                 result["host_updated_at"] = update.get("updated_at")
-                result["blazar_host_id"] = update.get("id")
             except BlazarAPIError as exc:
                 # TODO what error code does blazar return if the host has a lease already?
                 if exc.code == 404:

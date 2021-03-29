@@ -240,132 +240,135 @@ def test_existing_physical_host(
     assert blazar_request.call_count == 2
 
 
-# def _get_availability_window(database: "utils.DBFixtures") -> AvailabilityWindow:
-#     hw_obj = get_fake_hardware(database)
-#     fake_window = database.add_availability_window(hardware_uuid=hw_obj.uuid)
-#     return AvailabilityWindow(**fake_window)
+def _stub_blazar_lease_new(path, method, json, lease_dict):
+    """Stub for blazar when when no leases exist."""
+    lease_id = lease_dict.get("name")
+    if method == "get":
+        if path == f"/leases":
+            return utils.MockResponse(200, {"leases": []})
+        elif path == f"/leases/{lease_id}":
+            return utils.MockResponse(404)
+    elif method == "post" and path == f"/leases":
+        return utils.MockResponse(201, {"created_at": "fake-created_at"})
 
 
-# def _stub_blazar_lease_new(path, method, json, lease_dict):
-#     """Stub for blazar when when no leases exist."""
-#     lease_id = lease_dict.get("name")
-#     if method == "get":
-#         if path == f"/leases":
-#             return utils.MockResponse(200, {"leases": []})
-#         elif path == f"/leases/{lease_id}":
-#             return utils.MockResponse(404)
-#     elif method == "post" and path == f"/leases":
-#         return utils.MockResponse(201, {"created_at": "fake-created_at"})
+def _stub_blazar_lease_existing(path, method, json, lease_dict):
+    """Stub for blazar when when a lease with matching UUID exists."""
+    lease_id = lease_dict.get("name")
+    if method == "get":
+        if path == f"/leases":
+            return utils.MockResponse(
+                200,
+                {
+                    "leases": [
+                        lease_dict,
+                    ],
+                },
+            )
+        elif path == f"/leases/{lease_id}":
+            return utils.MockResponse(200, {"created_at": "fake-created_at"})
+    elif method == "put" and path == f"/leases/{lease_id}":
+        return utils.MockResponse(200, {"updated_at": "fake-updated_at"})
+    elif method == "post" and path == f"/leases":
+        return utils.MockResponse(409)
 
 
-# def _stub_blazar_lease_existing(path, method, json, lease_dict):
-#     """Stub for blazar when when a lease with matching UUID exists."""
-#     lease_id = lease_dict.get("name")
-#     if method == "get":
-#         if path == f"/leases":
-#             return utils.MockResponse(200, {"leases": [lease_dict]})
-#         elif path == f"/leases/{lease_id}":
-#             return utils.MockResponse(200, {"created_at": "fake-created_at"})
-#     elif method == "put" and path == f"/leases/{lease_id}":
-#         return utils.MockResponse(200, {"updated_at": "fake-updated_at"})
-#     elif method == "post" and path == f"/leases":
-#         return utils.MockResponse(409)
+def test_create_new_lease(
+    mocker,
+    admin_context: "RequestContext",
+    blazar_worker: "BlazarPhysicalHostWorker",
+    database: "utils.DBFixtures",
+):
+    """Test creation of new availability window lease.
+
+    This case assumes:
+    Blazar Host API:
+        1. The host's hw UUID is already in blazar.
+        2. The host has already been added to ironic, and therefore nova
+        3. The task's state_details has cached the blazar host ID
+    Blazar Lease API:
+        1. The availability window list has one item for the current hw item
+        2. blazar has no leases stored
+    """
+    hw_obj = get_fake_hardware(database)
+    fake_window = database.add_availability_window(hardware_uuid=hw_obj.uuid)
+    aw_obj = AvailabilityWindow(**fake_window)
+
+    def _stub_blazar_request(path, method=None, json=None, **kwargs):
+        print(f"path: {path}; method: {method}")
+        host_response = _stub_blazar_host_exist(path, method, json)
+        if host_response:
+            return host_response
+
+        lease_response = _stub_blazar_lease_new(
+            path, method, json, _blazar_lease_requst_body(aw_obj)
+        )
+        if lease_response:
+            return lease_response
+
+        raise NotImplementedError("Unexpected request signature")
+
+    blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
+    result = blazar_worker.process(
+        context=admin_context,
+        hardware=hw_obj,
+        availability_windows=[aw_obj],
+        state_details=TEST_STATE_DETAILS,
+    )
+
+    assert isinstance(result, WorkerResult.Success)
+
+    # 1 call to hosts path, 2 calls to leases
+    assert blazar_request.call_count == 3
 
 
-# def test_create_new_lease(
-#     mocker,
-#     admin_context: "RequestContext",
-#     blazar_worker: "BlazarPhysicalHostWorker",
-#     database: "utils.DBFixtures",
-# ):
-#     """Test creation of new availability window lease.
+def test_update_lease(
+    mocker,
+    admin_context: "RequestContext",
+    blazar_worker: "BlazarPhysicalHostWorker",
+    database: "utils.DBFixtures",
+):
+    """Test update of an existing lease for an availability.
 
-#     This case assumes:
-#     Blazar Host API:
-#         1. The host's hw UUID is already in blazar.
-#         2. The host has already been added to ironic, and therefore nova
-#         3. The task's state_details has cached the blazar host ID
-#     Blazar Lease API:
-#         1. The availability window list has one item for the current hw item
-#         2. blazar has no leases stored
-#     """
-#     test_window = _get_availability_window(database)
+    This case assumes:
+    Blazar Host API:
+        1. The host's hw UUID is already in blazar.
+        2. The host has already been added to ironic, and therefore nova
+        3. The task's state_details has cached the blazar host ID
+    Blazar Lease API:
+        1. The availability window list has one item for the current hw item
+        2. Blazar has 1 lease stored, that has a name matching the window uuid
+    """
+    hw_obj = get_fake_hardware(database)
+    fake_window = database.add_availability_window(hardware_uuid=hw_obj.uuid)
+    aw_obj = AvailabilityWindow(**fake_window)
 
-#     def _stub_blazar_request(path, method=None, json=None, **kwargs):
-#         print(f"path: {path}; method: {method}")
-#         host_response = _stub_blazar_host_exist(path, method, json)
-#         if host_response:
-#             return host_response
+    def _stub_blazar_request(path, method=None, json=None, **kwargs):
+        print(f"path: {path}; method: {method}")
+        host_response = _stub_blazar_host_exist(path, method, json)
+        if host_response:
+            return host_response
 
-#         lease_response = _stub_blazar_lease_new(
-#             path, method, json, _aw_lease_dict(aw_obj)
-#         )
-#         if lease_response:
-#             return lease_response
+        lease_response = _stub_blazar_lease_existing(
+            path, method, json, _blazar_lease_requst_body(aw_obj)
+        )
+        if lease_response:
+            return lease_response
 
-#         raise NotImplementedError("Unexpected request signature")
+        raise NotImplementedError("Unexpected request signature")
 
-#     blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
-#     result = blazar_worker.process(
-#         context=admin_context,
-#         hardware=hw_obj,
-#         availability_windows=[aw_obj],
-#         state_details=TEST_STATE_DETAILS,
-#     )
+    blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
+    result = blazar_worker.process(
+        context=admin_context,
+        hardware=hw_obj,
+        availability_windows=[aw_obj],
+        state_details=TEST_STATE_DETAILS,
+    )
 
-#     assert isinstance(result, WorkerResult.Success)
+    assert isinstance(result, WorkerResult.Success)
 
-#     # 1 call to hosts path, 2 calls to leases
-#     assert blazar_request.call_count == 3
-
-
-# def test_update_lease(
-#     mocker,
-#     admin_context: "RequestContext",
-#     blazar_worker: "BlazarPhysicalHostWorker",
-#     database: "utils.DBFixtures",
-# ):
-#     """Test update of an existing lease for an availability.
-
-#     This case assumes:
-#     Blazar Host API:
-#         1. The host's hw UUID is already in blazar.
-#         2. The host has already been added to ironic, and therefore nova
-#         3. The task's state_details has cached the blazar host ID
-#     Blazar Lease API:
-#         1. The availability window list has one item for the current hw item
-#         2. Blazar has 1 lease stored, that has a name matching the window uuid
-#     """
-#     hw_obj = get_fake_hardware(database)
-#     fake_window = database.add_availability_window(hardware_uuid=hw_obj.uuid)
-#     aw_obj = AvailabilityWindow(**fake_window)
-
-#     def _stub_blazar_request(path, method=None, json=None, **kwargs):
-#         print(f"path: {path}; method: {method}")
-#         host_response = _stub_blazar_host_exist(path, method, json)
-#         if host_response:
-#             return host_response
-
-#         lease_response = _stub_blazar_lease_existing(
-#             path, method, json, _aw_lease_dict(aw_obj)
-#         )
-#         if lease_response:
-#             return lease_response
-
-#         raise NotImplementedError("Unexpected request signature")
-
-#     blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
-#     result = blazar_worker.process(
-#         context=admin_context,
-#         hardware=hw_obj,
-#         availability_windows=[aw_obj],
-#         state_details=TEST_STATE_DETAILS,
-#     )
-
-#     assert isinstance(result, WorkerResult.Success)
-
-#     # 1 call to hosts path, 2 calls to leases
-#     assert blazar_request.call_count == 3
+    # 1 call to hosts path, 2 calls to leases
+    assert blazar_request.call_count == 3
 
 
 # def test_delete_lease(
