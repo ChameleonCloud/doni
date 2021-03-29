@@ -236,6 +236,17 @@ def _aw_lease_dict(aw: AvailabilityWindow) -> dict:
     return aw_dict
 
 
+def _stub_blazar_lease_new(path, method, json, lease_uuid):
+    """Stub for making a lease when none exist."""
+    if method == "get":
+        if path == f"/leases":
+            return utils.MockResponse(200, {"leases": []})
+        elif path == f"/leases/{lease_uuid}":
+            return utils.MockResponse(404)
+    elif method == "post" and path == f"/leases":
+        return utils.MockResponse(201, {"created_at": "fake-created_at"})
+
+
 def test_create_new_lease(
     mocker,
     admin_context: "RequestContext",
@@ -252,10 +263,10 @@ def test_create_new_lease(
         host_response = _stub_blazar_host_exist(path, method, json)
         if host_response:
             return host_response
-        elif method == "get" and path == f"/leases/{aw_obj.uuid}":
-            return utils.MockResponse(404)
-        elif method == "post" and path == f"/leases":
-            return utils.MockResponse(201, {"created_at": "fake-created_at"})
+
+        lease_response = _stub_blazar_lease_new(path, method, json, aw_obj.uuid)
+        if lease_response:
+            return lease_response
 
         raise NotImplementedError("Unexpected request signature")
 
@@ -346,7 +357,7 @@ def test_delete_lease(
             return host_response
         elif method == "get":
             if path == "/leases":
-                return utils.MockResponse(200, aw_dict)
+                return utils.MockResponse(200, list(aw_dict.values()))
             elif path in aw_dict.keys():
                 return utils.MockResponse(200, aw_dict.get(path))
             else:

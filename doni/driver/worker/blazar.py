@@ -8,11 +8,11 @@ from oslo_log import log
 
 from doni.common import args, exception, keystone
 from doni.conf import auth as auth_conf
+from doni.objects.availability_window import AvailabilityWindow
 from doni.worker import BaseWorker, WorkerResult
 
 if TYPE_CHECKING:
     from doni.common.context import RequestContext
-    from doni.objects.availability_window import AvailabilityWindow
     from doni.objects.hardware import Hardware
 
 
@@ -67,6 +67,24 @@ def _defer_on_node_locked(fn):
             raise
 
     return wrapper
+
+
+def _aw_lease_dict(aw: AvailabilityWindow) -> dict:
+    aw_dict = {
+        "name": f"availability_window_{aw.uuid}",
+        "start_date": aw.start.isoformat(),
+        "end_date": aw.end.isoformat(),
+        "reservations": [
+            {
+                "resource_type": "physical:host",
+                "min": 1,
+                "max": 1,
+                "hypervisor_properties": None,
+                "resource_properties": '["=","$uid",{aw.hardware_uuid}]',
+            },
+        ],
+    }
+    return aw_dict
 
 
 class BlazarPhysicalHostWorker(BaseWorker):
@@ -141,37 +159,36 @@ class BlazarPhysicalHostWorker(BaseWorker):
             state_details["id"] = host.get("id")
             result["host_created_at"] = host.get("created_at")
 
+        # List of all leases from blazar
+        leases_arr_dict = _call_blazar(
+            context,
+            f"/leases",
+            method="get",
+            allowed_status_codes=[200],
+        )
+        leases_arr = leases_arr_dict.get("leases")
+
+        # Loop over all availability windows for this hw item that Doni has
         for aw in availability_windows or []:
-            aw_dict = {
-                "name": f"availability_window_{aw.uuid}",
-                "start_date": aw.start.isoformat(),
-                "end_date": aw.end.isoformat(),
-                "reservations": [
-                    {
-                        "resource_type": "physical:host",
-                        "min": 1,
-                        "max": 1,
-                        "hypervisor_properties": None,
-                        "resource_properties": '["=","$uid",{aw.hardware_uuid}]',
-                    },
-                ],
-            }
 
-            request_body = aw_dict
-
-            lease = _call_blazar(
-                context,
-                f"/leases/{aw.uuid}",
-                method="get",
-                allowed_status_codes=[200, 404],
+            aw_dict = _aw_lease_dict(aw)
+            # Check to see if lease name already exists in blazar
+            matching_lease = next(
+                (
+                    lease
+                    for lease in leases_arr
+                    if lease.get("name") == aw_dict.get("name")
+                ),
+                None,
             )
-            if lease:
-                if not (aw_dict.items() <= lease.items()):
+            # If the lease exists, then see if it needs to be updated
+            if matching_lease:
+                if not (aw_dict.items() <= matching_lease.items()):
                     update = _call_blazar(
                         context,
                         f"/leases/{aw.uuid}",
                         method="put",
-                        json=request_body,
+                        json=aw_dict,
                         allowed_status_codes=[200],
                     )
                     result["lease_updated_at"] = update.get("updated_at")
@@ -180,7 +197,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                     context,
                     f"/leases",
                     method="post",
-                    json=request_body,
+                    json=aw_dict,
                     allowed_status_codes=[201],
                 )
                 result["lease_created_at"] = lease.get("created_at")
