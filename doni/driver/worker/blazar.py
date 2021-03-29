@@ -152,6 +152,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                     allowed_status_codes=[200],
                 )
                 result["host_updated_at"] = update.get("updated_at")
+                result["blazar_host_id"] = update.get("id")
             except BlazarAPIError as exc:
                 # TODO what error code does blazar return if the host has a lease already?
                 if exc.code == 404:
@@ -204,7 +205,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
         # Loop over all availability windows for this hw item that Doni has
         for aw in availability_windows or []:
 
-            aw_dict = _aw_lease_dict(aw)
+            aw_dict = _blazar_lease_requst_body(aw)
             # Check to see if lease name already exists in blazar
             matching_lease = next(
                 (

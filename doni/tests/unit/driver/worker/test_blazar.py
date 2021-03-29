@@ -105,7 +105,7 @@ def _stub_blazar_host_new(path, method, json):
     """Blazar stub for case where host where matching UUID does not exist."""
     if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
         return utils.MockResponse(404)
-    elif method == "get" and path == f"/os-hosts/":
+    elif method == "get" and path == f"/os-hosts":
         return utils.MockResponse(200, {"hosts": []})
     elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
         return utils.MockResponse(404)
@@ -127,7 +127,14 @@ def _stub_blazar_host_exist(path, method, json, hw_list=None):
         return utils.MockResponse(200, _get_hosts_response(hw_list))
     elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
         assert json["node_name"] == "fake_name_1"
-        return utils.MockResponse(201, {"updated_at": "fake-updated_at"})
+        return utils.MockResponse(
+            200,
+            {
+                "updated_at": "fake-updated_at",
+                "id": TEST_BLAZAR_HOST_ID,
+                "name": TEST_HARDWARE_UUID,
+            },
+        )
     elif method == "post" and path == f"/os-hosts":
         # TODO Is this true?
         return utils.MockResponse(
@@ -139,20 +146,30 @@ def _stub_blazar_host_exist(path, method, json, hw_list=None):
         return None
 
 
-def test_create_new_physical_host(
+@pytest.mark.parametrize(
+    "state_details,result_type,host_created_at",
+    [
+        ({}, WorkerResult.Success, "fake-created_at"),
+        (TEST_STATE_DETAILS, WorkerResult.Defer, None),
+    ],
+)
+def test_new_physical_host(
     mocker,
     admin_context: "RequestContext",
     blazar_worker: "BlazarPhysicalHostWorker",
     database: "utils.DBFixtures",
+    state_details: "dict",
+    result_type: "type",
+    host_created_at: "str",
 ):
     """Test creation of a new physical host in blazar.
 
-    This case assumes:
+    Case 1: Blazar Host ID is None, Host is being added for the first time (normal create)
+    Case 2: Blazar Host ID is present, but doesn't match an existing host. (update and 404)
+
+    This assumes:
     1. The host's hw UUID is unique.
     2. The host has already been added to ironic, and therefore nova
-    3. The task's state_details has no cached blazar host ID
-
-    We therefore assume that blazar will accept the new host.
     """
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
@@ -165,21 +182,35 @@ def test_create_new_physical_host(
     result = blazar_worker.process(
         context=admin_context,
         hardware=get_fake_hardware(database),
-        state_details={},
+        state_details=state_details,
     )
 
-    assert isinstance(result, WorkerResult.Success)
-    assert result.payload.get("host_created_at") == "fake-created_at"
+    assert isinstance(result, result_type)
+    assert result.payload.get("host_created_at") == host_created_at
     assert blazar_request.call_count == 2
 
 
-def test_create_duplicate_physical_host(
+@pytest.mark.parametrize(
+    "state_details,result_type,blazar_host_id",
+    [
+        ({}, WorkerResult.Defer, TEST_BLAZAR_HOST_ID),
+        (TEST_STATE_DETAILS, WorkerResult.Success, TEST_BLAZAR_HOST_ID),
+    ],
+)
+def test_existing_physical_host(
     mocker,
     admin_context: "RequestContext",
     blazar_worker: "BlazarPhysicalHostWorker",
     database: "utils.DBFixtures",
+    state_details: "dict",
+    result_type: "type",
+    blazar_host_id: "str",
 ):
     """Test creation of a duplicate physical host in blazar.
+
+    Cases:
+    1: cached Blazer Host ID is None, but host exists in blazar (create + cache miss)
+    2: cached Blazer Host ID is Present, and host exists in blazar (normal update case)
 
     This case assumes:
     1. The host's hw UUID is already in blazar.
@@ -188,11 +219,11 @@ def test_create_duplicate_physical_host(
 
     We therefore assume that blazar will detect the duplicate.
     """
-
     hw_to_add = get_fake_hardware(database)
+    hw_list = [hw_to_add]
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
-        host_response = _stub_blazar_host_exist(path, method, json, hw_list=[hw_to_add])
+        host_response = _stub_blazar_host_exist(path, method, json, hw_list)
         if host_response:
             return host_response
         raise NotImplementedError("Unexpected request signature")
@@ -201,45 +232,11 @@ def test_create_duplicate_physical_host(
     result = blazar_worker.process(
         context=admin_context,
         hardware=hw_to_add,
-        state_details={},
+        state_details=state_details,
     )
 
-    assert isinstance(result, WorkerResult.Defer)
-    assert result.payload.get("blazar_host_id") == TEST_BLAZAR_HOST_ID
-    assert blazar_request.call_count == 2
-
-
-def test_update_existing_physical_host(
-    mocker,
-    admin_context: "RequestContext",
-    blazar_worker: "BlazarPhysicalHostWorker",
-    database: "utils.DBFixtures",
-):
-    """Test update of an existing physical host in blazar.
-
-    This case assumes:
-    1. The host's hw UUID is already in blazar.
-    2. The host has already been added to ironic, and therefore nova
-    3. The task's state_details has cached the blazar host ID
-
-    We therefore assume that blazar will detect the duplicate.
-    """
-
-    def _stub_blazar_request(path, method=None, json=None, **kwargs):
-        host_response = _stub_blazar_host_exist(path, method, json)
-        if host_response:
-            return host_response
-        raise NotImplementedError("Unexpected request signature")
-
-    blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
-    result = blazar_worker.process(
-        context=admin_context,
-        hardware=get_fake_hardware(database),
-        state_details=TEST_STATE_DETAILS,
-    )
-
-    assert isinstance(result, WorkerResult.Success)
-    assert result.payload.get("host_updated_at") == "fake-updated_at"
+    assert isinstance(result, result_type)
+    assert result.payload.get("blazar_host_id") == blazar_host_id
     assert blazar_request.call_count == 2
 
 
