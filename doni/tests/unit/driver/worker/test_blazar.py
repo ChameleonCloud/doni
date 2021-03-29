@@ -86,16 +86,21 @@ def get_mocked_blazar(mocker, request_fn):
 
 
 def _stub_blazar_host_new(path, method, json):
+    """Blazar stub for case where host where matching UUID does not exist."""
     if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
-        # Return 404 because this host shouldn't exist yet.
+        return utils.MockResponse(404)
+    elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
         return utils.MockResponse(404)
     elif method == "post" and path == f"/os-hosts":
         # assume that creation succeeds, return created time
         assert json["node_name"] == "fake_name_1"
         return utils.MockResponse(201, {"created_at": "fake-created_at"})
+    else:
+        return None
 
 
 def _stub_blazar_host_exist(path, method, json):
+    """Blazar stub for case where host where matching UUID exists."""
     if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
         return utils.MockResponse(200)
     elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
@@ -106,6 +111,8 @@ def _stub_blazar_host_exist(path, method, json):
         return utils.MockResponse(
             409, {"created_at": "fake-created_at", "name": "{TEST_BLAZAR_HOST_ID}"}
         )
+    else:
+        return None
 
 
 def test_create_new_physical_host(
@@ -116,7 +123,12 @@ def test_create_new_physical_host(
 ):
     """Test creation of a new physical host in blazar.
 
-    This tests creation of a new host, when it doesn't exist already
+    This case assumes:
+    1. The host's hw UUID is unique.
+    2. The host has already been added to ironic, and therefore nova
+    3. The task's state_details has no cached blazar host ID
+
+    We therefore assume that blazar will accept the new host.
     """
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
@@ -143,9 +155,14 @@ def test_create_duplicate_physical_host(
     blazar_worker: "BlazarPhysicalHostWorker",
     database: "utils.DBFixtures",
 ):
-    """Test creation of a new physical host in blazar.
+    """Test creation of a duplicate physical host in blazar.
 
-    This tests creation of a new host, when it doesn't exist already
+    This case assumes:
+    1. The host's hw UUID is already in blazar.
+    2. The host has already been added to ironic, and therefore nova
+    3. The task's state_details has no cached blazar host ID
+
+    We therefore assume that blazar will detect the duplicate.
     """
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
@@ -172,7 +189,15 @@ def test_update_existing_physical_host(
     blazar_worker: "BlazarPhysicalHostWorker",
     database: "utils.DBFixtures",
 ):
-    """Test update of an existing physical host in blazar."""
+    """Test update of an existing physical host in blazar.
+
+    This case assumes:
+    1. The host's hw UUID is already in blazar.
+    2. The host has already been added to ironic, and therefore nova
+    3. The task's state_details has cached the blazar host ID
+
+    We therefore assume that blazar will detect the duplicate.
+    """
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
         host_response = _stub_blazar_host_exist(path, method, json)
