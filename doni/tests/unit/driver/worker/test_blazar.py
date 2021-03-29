@@ -96,6 +96,8 @@ def _stub_blazar_host_new(path, method, json):
         # assume that creation succeeds, return created time
         assert json["node_name"] == "fake_name_1"
         return utils.MockResponse(201, {"created_at": "fake-created_at"})
+    elif method == "get" and path == f"/leases":
+        return utils.MockResponse(200, {"leases": []})
     else:
         return None
 
@@ -112,6 +114,8 @@ def _stub_blazar_host_exist(path, method, json):
         return utils.MockResponse(
             409, {"created_at": "fake-created_at", "name": "{TEST_BLAZAR_HOST_ID}"}
         )
+    elif method == "get" and path == f"/leases":
+        return utils.MockResponse(200, {"leases": []})
     else:
         return None
 
@@ -147,7 +151,7 @@ def test_create_new_physical_host(
 
     assert isinstance(result, WorkerResult.Success)
     assert result.payload.get("host_created_at") == "fake-created_at"
-    assert blazar_request.call_count == 1
+    assert blazar_request.call_count == 2
 
 
 def test_create_duplicate_physical_host(
@@ -179,8 +183,7 @@ def test_create_duplicate_physical_host(
         state_details={},
     )
 
-    assert isinstance(result, WorkerResult.Success)
-    assert result.payload.get("host_created_at") == "fake-created_at"
+    assert isinstance(result, WorkerResult.Defer)
     assert blazar_request.call_count == 1
 
 
@@ -215,7 +218,7 @@ def test_update_existing_physical_host(
 
     assert isinstance(result, WorkerResult.Success)
     assert result.payload.get("host_updated_at") == "fake-updated_at"
-    assert blazar_request.call_count == 1
+    assert blazar_request.call_count == 2
 
 
 def _aw_lease_dict(aw: AvailabilityWindow) -> dict:
@@ -236,15 +239,30 @@ def _aw_lease_dict(aw: AvailabilityWindow) -> dict:
     return aw_dict
 
 
-def _stub_blazar_lease_new(path, method, json, lease_uuid):
-    """Stub for making a lease when none exist."""
+def _stub_blazar_lease_new(path, method, json, lease_dict):
+    """Stub for blazar when when no leases exist."""
+    lease_id = lease_dict.get("name")
     if method == "get":
         if path == f"/leases":
             return utils.MockResponse(200, {"leases": []})
-        elif path == f"/leases/{lease_uuid}":
+        elif path == f"/leases/{lease_id}":
             return utils.MockResponse(404)
     elif method == "post" and path == f"/leases":
         return utils.MockResponse(201, {"created_at": "fake-created_at"})
+
+
+def _stub_blazar_lease_existing(path, method, json, lease_dict):
+    """Stub for blazar when when a lease with matching UUID exists."""
+    lease_id = lease_dict.get("name")
+    if method == "get":
+        if path == f"/leases":
+            return utils.MockResponse(200, {"leases": [lease_dict]})
+        elif path == f"/leases/{lease_id}":
+            return utils.MockResponse(200, {"created_at": "fake-created_at"})
+    elif method == "put" and path == f"/leases/{lease_id}":
+        return utils.MockResponse(200, {"updated_at": "fake-updated_at"})
+    elif method == "post" and path == f"/leases":
+        return utils.MockResponse(409)
 
 
 def test_create_new_lease(
@@ -264,7 +282,9 @@ def test_create_new_lease(
         if host_response:
             return host_response
 
-        lease_response = _stub_blazar_lease_new(path, method, json, aw_obj.uuid)
+        lease_response = _stub_blazar_lease_new(
+            path, method, json, _aw_lease_dict(aw_obj)
+        )
         if lease_response:
             return lease_response
 
@@ -302,10 +322,12 @@ def test_update_lease(
         host_response = _stub_blazar_host_exist(path, method, json)
         if host_response:
             return host_response
-        elif method == "get" and path == f"/leases/{aw_obj.uuid}":
-            return utils.MockResponse(200, {"created_at": "fake-created_at"})
-        elif method == "put" and path == f"/leases/{aw_obj.uuid}":
-            return utils.MockResponse(200, {"updated_at": "fake-updated_at"})
+
+        lease_response = _stub_blazar_lease_existing(
+            path, method, json, _aw_lease_dict(aw_obj)
+        )
+        if lease_response:
+            return lease_response
 
         raise NotImplementedError("Unexpected request signature")
 
@@ -323,64 +345,64 @@ def test_update_lease(
     assert blazar_request.call_count == 3
 
 
-def test_delete_lease(
-    mocker,
-    admin_context: "RequestContext",
-    blazar_worker: "BlazarPhysicalHostWorker",
-    database: "utils.DBFixtures",
-):
-    """Test deletion of an existing lease.
+# def test_delete_lease(
+#     mocker,
+#     admin_context: "RequestContext",
+#     blazar_worker: "BlazarPhysicalHostWorker",
+#     database: "utils.DBFixtures",
+# ):
+#     """Test deletion of an existing lease.
 
-    This case assumes:
-    1. A lease was created, matching the UUID of an availability window.
-    2. That availability window was then removed.
-    3. Any lease with a name not matching an availability window should be removed.
-    4. TODO: how is this filtered so as not to remove all leases!
-    """
-    hw_obj = get_fake_hardware(database)
+#     This case assumes:
+#     1. A lease was created, matching the UUID of an availability window.
+#     2. That availability window was then removed.
+#     3. Any lease with a name not matching an availability window should be removed.
+#     4. TODO: how is this filtered so as not to remove all leases!
+#     """
+#     hw_obj = get_fake_hardware(database)
 
-    aw_list = []
-    aw_dict = {}
+#     aw_list = []
+#     aw_dict = {}
 
-    for i in range(0, 2):
-        fake_window = database.add_availability_window(hardware_uuid=hw_obj.uuid)
-        aw_obj = AvailabilityWindow(**fake_window)
-        # Create list to pass to blazar call
-        aw_list.append(aw_obj)
-        # add to dict, for use in mocked response
-        aw_dict[f"/leases/{aw_obj.uuid}"] = _aw_lease_dict(aw_obj)
+#     for i in range(0, 2):
+#         fake_window = database.add_availability_window(hardware_uuid=hw_obj.uuid)
+#         aw_obj = AvailabilityWindow(**fake_window)
+#         # Create list to pass to blazar call
+#         aw_list.append(aw_obj)
+#         # add to dict, for use in mocked response
+#         aw_dict[f"/leases/{aw_obj.uuid}"] = _aw_lease_dict(aw_obj)
 
-    def _stub_blazar_request(path, method=None, json=None, **kwargs):
-        print(f"path: {path}; method: {method}")
-        host_response = _stub_blazar_host_exist(path, method, json)
-        if host_response:
-            return host_response
-        elif method == "get":
-            if path == "/leases":
-                return utils.MockResponse(200, list(aw_dict.values()))
-            elif path in aw_dict.keys():
-                return utils.MockResponse(200, aw_dict.get(path))
-            else:
-                return utils.MockResponse(404)
-        elif method == "put" and path in aw_dict.keys():
-            print(aw_dict.get(path))
-            return utils.MockResponse(200, aw_dict.get(path))
-        elif method == "delete":
-            if path in aw_dict.keys():
-                return utils.MockResponse(204)
-            else:
-                return utils.MockResponse(404)
-        else:
-            raise NotImplementedError("Unexpected request signature")
+#     def _stub_blazar_request(path, method=None, json=None, **kwargs):
+#         print(f"path: {path}; method: {method}")
+#         host_response = _stub_blazar_host_exist(path, method, json)
+#         if host_response:
+#             return host_response
+#         elif method == "get":
+#             if path == "/leases":
+#                 return utils.MockResponse(200, list(aw_dict.values()))
+#             elif path in aw_dict.keys():
+#                 return utils.MockResponse(200, aw_dict.get(path))
+#             else:
+#                 return utils.MockResponse(404)
+#         elif method == "put" and path in aw_dict.keys():
+#             print(aw_dict.get(path))
+#             return utils.MockResponse(200, aw_dict.get(path))
+#         elif method == "delete":
+#             if path in aw_dict.keys():
+#                 return utils.MockResponse(204)
+#             else:
+#                 return utils.MockResponse(404)
+#         else:
+#             raise NotImplementedError("Unexpected request signature")
 
-    blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
-    result = blazar_worker.process(
-        context=admin_context,
-        hardware=hw_obj,
-        availability_windows=aw_list,
-        state_details=TEST_STATE_DETAILS,
-    )
+#     blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
+#     result = blazar_worker.process(
+#         context=admin_context,
+#         hardware=hw_obj,
+#         availability_windows=aw_list,
+#         state_details=TEST_STATE_DETAILS,
+#     )
 
-    assert isinstance(result, WorkerResult.Success)
+#     assert isinstance(result, WorkerResult.Success)
 
-    assert blazar_request.call_count == 3
+#     assert blazar_request.call_count == 3

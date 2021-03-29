@@ -56,17 +56,15 @@ class BlazarNodeProvisionStateTimeout(exception.DoniException):
     )
 
 
-def _defer_on_node_locked(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        try:
-            return fn(*args, **kwargs)
-        except BlazarAPIError as exc:
-            if exc.code == 409:
-                return WorkerResult.Defer({"message": "Node is locked by ironic."})
-            raise
-
-    return wrapper
+# def _defer_on_node_locked(fn):
+#     @wraps(fn)
+#     def wrapper(*args, **kwargs):
+#         try:
+#             return fn(*args, **kwargs)
+#         except BlazarAPIError as exc:
+#             if exc.code == 409:
+#                 return WorkerResult.Defer({"message": "Host is duplicate in Blazar."})
+#                 raise
 
 
 def _aw_lease_dict(aw: AvailabilityWindow) -> dict:
@@ -98,7 +96,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
     def list_opts(self):
         return auth_conf.add_auth_opts(self.opts, service_type="reservation")
 
-    @_defer_on_node_locked
+    # @_defer_on_node_locked
     def process(
         self,
         context: "RequestContext",
@@ -149,17 +147,22 @@ class BlazarPhysicalHostWorker(BaseWorker):
         else:
             # We don't have a cached host_id, try to create a host. If the host exists,
             # blazar will match the uuid, and the request will fail.
-            host = _call_blazar(
-                context,
-                f"/os-hosts",
-                method="post",
-                json=info_to_set,
-                allowed_status_codes=[201, 409],
-            )
-            state_details["id"] = host.get("id")
-            result["host_created_at"] = host.get("created_at")
+            try:
+                host = _call_blazar(
+                    context,
+                    f"/os-hosts",
+                    method="post",
+                    json=info_to_set,
+                    allowed_status_codes=[201],
+                )
+                result["blazar_host_id"] = host.get("id")
+                result["host_created_at"] = host.get("created_at")
+            except BlazarAPIError as exc:
+                if exc.code == 409:
+                    return WorkerResult.Defer(result)
+                raise
 
-        # List of all leases from blazar
+        # List of all leases from blazar.
         leases_arr_dict = _call_blazar(
             context,
             f"/leases",
