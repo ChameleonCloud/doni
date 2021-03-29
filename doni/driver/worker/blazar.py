@@ -56,19 +56,23 @@ class BlazarNodeProvisionStateTimeout(exception.DoniException):
     )
 
 
-# def _defer_on_node_locked(fn):
-#     @wraps(fn)
-#     def wrapper(*args, **kwargs):
-#         try:
-#             return fn(*args, **kwargs)
-#         except BlazarAPIError as exc:
-#             if exc.code == 409:
-#                 return WorkerResult.Defer({"message": "Host is duplicate in Blazar."})
-#                 raise
+def _blazar_host_requst_body(hw: "Hardware") -> dict:
+    hw_props = hw.properties
+    body_dict = {
+        "name": hw.uuid,
+        "uid": hw.uuid,
+        "node_name": hw.name,
+        "node_type": hw_props.get("node_type"),
+        "placement": {
+            "node": hw_props.get("node"),
+            "rack": hw_props.get("rack"),
+        },
+    }
+    return body_dict
 
 
-def _aw_lease_dict(aw: AvailabilityWindow) -> dict:
-    aw_dict = {
+def _blazar_lease_requst_body(aw: AvailabilityWindow) -> dict:
+    body_dict = {
         "name": f"availability_window_{aw.uuid}",
         "start_date": aw.start.isoformat(),
         "end_date": aw.end.isoformat(),
@@ -82,7 +86,7 @@ def _aw_lease_dict(aw: AvailabilityWindow) -> dict:
             },
         ],
     }
-    return aw_dict
+    return body_dict
 
 
 class BlazarPhysicalHostWorker(BaseWorker):
@@ -96,7 +100,6 @@ class BlazarPhysicalHostWorker(BaseWorker):
     def list_opts(self):
         return auth_conf.add_auth_opts(self.opts, service_type="reservation")
 
-    # @_defer_on_node_locked
     def process(
         self,
         context: "RequestContext",
@@ -114,17 +117,21 @@ class BlazarPhysicalHostWorker(BaseWorker):
         blazar uses nova.get_servers_per_host to check if there is an existing
         server with that name.
         """
-        hw_props = hardware.properties
-        info_to_set = {
-            "name": hardware.uuid,
-            "uid": hardware.uuid,
-            "node_name": hardware.name,
-            "node_type": hw_props.get("node_type"),
-            "placement": {
-                "node": hw_props.get("node"),
-                "rack": hw_props.get("rack"),
-            },
-        }
+
+        def _search_hosts_for_uuid(hw_uuid) -> dict:
+            host_list_response = _call_blazar(
+                context,
+                f"/os-hosts",
+                method="get",
+                json={},
+                allowed_status_codes=[200],
+            )
+            host_list = host_list_response.get("hosts")
+            matching_host = next(
+                (host for host in host_list if host.get("name") == hw_uuid),
+                None,
+            )
+            return matching_host
 
         # If we know the host_id, then update that host.
         # If we don't then attempt to create it
@@ -136,14 +143,28 @@ class BlazarPhysicalHostWorker(BaseWorker):
         if host_id:
             # Always try to update the host in blazar. We could add a precondition
             # header based on e.g. timestamp if needed.
-            update = _call_blazar(
-                context,
-                f"/os-hosts/{host_id}",
-                method="put",
-                json=info_to_set,
-                allowed_status_codes=[200],
-            )
-            result["host_updated_at"] = update.get("updated_at")
+            try:
+                update = _call_blazar(
+                    context,
+                    f"/os-hosts/{host_id}",
+                    method="put",
+                    json=_blazar_host_requst_body(hardware),
+                    allowed_status_codes=[200],
+                )
+                result["host_updated_at"] = update.get("updated_at")
+            except BlazarAPIError as exc:
+                # TODO what error code does blazar return if the host has a lease already?
+                if exc.code == 404:
+                    host = _search_hosts_for_uuid(hardware.uuid)
+                    if host:
+                        # update stored host_id with match, and retry after defer
+                        result["blazar_host_id"] = host.get("id")
+                    else:
+                        # remove invalid stored host_id and retry after defer
+                        result["blazar_host_id"] = None
+                    return WorkerResult.Defer(result)
+                else:
+                    raise
         else:
             # We don't have a cached host_id, try to create a host. If the host exists,
             # blazar will match the uuid, and the request will fail.
@@ -152,15 +173,24 @@ class BlazarPhysicalHostWorker(BaseWorker):
                     context,
                     f"/os-hosts",
                     method="post",
-                    json=info_to_set,
+                    json=_blazar_host_requst_body(hardware),
                     allowed_status_codes=[201],
                 )
                 result["blazar_host_id"] = host.get("id")
                 result["host_created_at"] = host.get("created_at")
             except BlazarAPIError as exc:
                 if exc.code == 409:
+                    host = _search_hosts_for_uuid(hardware.uuid)
+                    if host:
+                        # update stored host_id with match, and retry after defer
+                        result["blazar_host_id"] = host.get("id")
+                    else:
+                        # got conflict despite no matching host,
+                        # TODO what error code does blazar return if the host isn't in ironic?
+                        pass
                     return WorkerResult.Defer(result)
-                raise
+                else:
+                    raise
 
         # List of all leases from blazar.
         leases_arr_dict = _call_blazar(
