@@ -1,5 +1,6 @@
 """Unit tests for blazar sync worker."""
 import json
+from datetime import timedelta
 from typing import TYPE_CHECKING
 from unittest import mock
 
@@ -114,7 +115,7 @@ def _stub_blazar_host_new(path, method, json):
         assert json["node_name"] == "fake_name_1"
         return utils.MockResponse(201, {"created_at": "fake-created_at"})
     elif method == "get" and path == f"/leases":
-        return utils.MockResponse(200, {"leases": []})
+        return utils.MockResponse(200, {"leases": ["foo"]})
     else:
         return None
 
@@ -141,7 +142,7 @@ def _stub_blazar_host_exist(path, method, json, hw_list=None):
             409, {"created_at": "fake-created_at", "name": "{TEST_BLAZAR_HOST_ID}"}
         )
     elif method == "get" and path == f"/leases":
-        return utils.MockResponse(200, {"leases": []})
+        return utils.MockResponse(200, {"leases": ["bar"]})
     else:
         return None
 
@@ -244,32 +245,26 @@ def _stub_blazar_lease_new(path, method, json, lease_dict):
     """Stub for blazar when when no leases exist."""
     lease_id = lease_dict.get("name")
     if method == "get":
-        if path == f"/leases":
+        if path == "/leases":
             return utils.MockResponse(200, {"leases": []})
         elif path == f"/leases/{lease_id}":
             return utils.MockResponse(404)
-    elif method == "post" and path == f"/leases":
+    elif method == "post" and path == "/leases":
         return utils.MockResponse(201, {"created_at": "fake-created_at"})
 
 
 def _stub_blazar_lease_existing(path, method, json, lease_dict):
     """Stub for blazar when when a lease with matching UUID exists."""
+    lease_body = {"leases": [lease_dict]}
     lease_id = lease_dict.get("name")
     if method == "get":
-        if path == f"/leases":
-            return utils.MockResponse(
-                200,
-                {
-                    "leases": [
-                        lease_dict,
-                    ],
-                },
-            )
+        if path == "/leases":
+            return utils.MockResponse(200, lease_body)
         elif path == f"/leases/{lease_id}":
             return utils.MockResponse(200, {"created_at": "fake-created_at"})
     elif method == "put" and path == f"/leases/{lease_id}":
         return utils.MockResponse(200, {"updated_at": "fake-updated_at"})
-    elif method == "post" and path == f"/leases":
+    elif method == "post" and path == "/leases":
         return utils.MockResponse(409)
 
 
@@ -296,15 +291,17 @@ def test_create_new_lease(
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
         print(f"path: {path}; method: {method}")
-        host_response = _stub_blazar_host_exist(path, method, json)
-        if host_response:
-            return host_response
 
         lease_response = _stub_blazar_lease_new(
             path, method, json, _blazar_lease_requst_body(aw_obj)
         )
         if lease_response:
             return lease_response
+
+        # If matched in leases, this will not execute
+        host_response = _stub_blazar_host_exist(path, method, json)
+        if host_response:
+            return host_response
 
         raise NotImplementedError("Unexpected request signature")
 
@@ -322,11 +319,21 @@ def test_create_new_lease(
     assert blazar_request.call_count == 3
 
 
+@pytest.mark.parametrize(
+    "lease_changed,result_type,call_count",
+    [
+        (False, WorkerResult.Success, 2),
+        (True, WorkerResult.Success, 3),
+    ],
+)
 def test_update_lease(
     mocker,
     admin_context: "RequestContext",
     blazar_worker: "BlazarPhysicalHostWorker",
     database: "utils.DBFixtures",
+    lease_changed: "bool",
+    result_type: "type",
+    call_count: "int",
 ):
     """Test update of an existing lease for an availability.
 
@@ -338,6 +345,11 @@ def test_update_lease(
     Blazar Lease API:
         1. The availability window list has one item for the current hw item
         2. Blazar has 1 lease stored, that has a name matching the window uuid
+
+    Cases:
+        1. Lease exists, and all info matches
+        2. Lease exists, and some info does not match
+        3. Lease does not exist
     """
     hw_obj = get_fake_hardware(database)
     fake_window = database.add_availability_window(hardware_uuid=hw_obj.uuid)
@@ -345,15 +357,21 @@ def test_update_lease(
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
         print(f"path: {path}; method: {method}")
+        response_body = _blazar_lease_requst_body(aw_obj)
+
+        if lease_changed:
+            # Change end time to force lease update
+            timechange = timedelta(days=1)
+            response_body["end_date"] = (aw_obj.end + timechange).isoformat()
+
+        lease_response = _stub_blazar_lease_existing(path, method, json, response_body)
+        if lease_response:
+            return lease_response
+
+        # If matched in leases, this will not execute
         host_response = _stub_blazar_host_exist(path, method, json)
         if host_response:
             return host_response
-
-        lease_response = _stub_blazar_lease_existing(
-            path, method, json, _blazar_lease_requst_body(aw_obj)
-        )
-        if lease_response:
-            return lease_response
 
         raise NotImplementedError("Unexpected request signature")
 
@@ -365,10 +383,10 @@ def test_update_lease(
         state_details=TEST_STATE_DETAILS,
     )
 
-    assert isinstance(result, WorkerResult.Success)
+    assert isinstance(result, result_type)
 
     # 1 call to hosts path, 2 calls to leases
-    assert blazar_request.call_count == 3
+    assert blazar_request.call_count == call_count
 
 
 # def test_delete_lease(

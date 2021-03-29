@@ -42,6 +42,10 @@ class BlazarUnavailable(exception.DoniException):
     )
 
 
+class BlazarIsWrongError(exception.DoniException):
+    _msg_fmt = "Blazar is in a bad state. " "The precise error was: %(message)s"
+
+
 class BlazarAPIError(exception.DoniException):
     _msg_fmt = "Blazar responded with HTTP %(code)s: %(text)s"
 
@@ -82,7 +86,7 @@ def _blazar_lease_requst_body(aw: AvailabilityWindow) -> dict:
                 "min": 1,
                 "max": 1,
                 "hypervisor_properties": None,
-                "resource_properties": '["=","$uid",{aw.hardware_uuid}]',
+                "resource_properties": '["==","$uid",{aw.hardware_uuid}]',
             },
         ],
     }
@@ -151,6 +155,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                     json=_blazar_host_requst_body(hardware),
                     allowed_status_codes=[200],
                 )
+                result["blazar_host_id"] = update.get("id")
                 result["host_updated_at"] = update.get("updated_at")
             except BlazarAPIError as exc:
                 # TODO what error code does blazar return if the host has a lease already?
@@ -179,6 +184,9 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 result["blazar_host_id"] = host.get("id")
                 result["host_created_at"] = host.get("created_at")
             except BlazarAPIError as exc:
+                if exc.code == 404:
+                    # host isn't in ironic?
+                    return WorkerResult.Defer(result)
                 if exc.code == 409:
                     host = _search_hosts_for_uuid(hardware.uuid)
                     if host:
@@ -186,20 +194,19 @@ class BlazarPhysicalHostWorker(BaseWorker):
                         result["blazar_host_id"] = host.get("id")
                     else:
                         # got conflict despite no matching host,
-                        # TODO what error code does blazar return if the host isn't in ironic?
-                        pass
+                        raise BlazarIsWrongError
                     return WorkerResult.Defer(result)
                 else:
                     raise
 
         # List of all leases from blazar.
-        leases_arr_dict = _call_blazar(
+        lease_list_response = _call_blazar(
             context,
-            f"/leases",
+            "/leases",
             method="get",
             allowed_status_codes=[200],
         )
-        leases_arr = leases_arr_dict.get("leases")
+        print(f"lease_list_response: {lease_list_response}")
 
         # Loop over all availability windows for this hw item that Doni has
         for aw in availability_windows or []:
@@ -209,17 +216,18 @@ class BlazarPhysicalHostWorker(BaseWorker):
             matching_lease = next(
                 (
                     lease
-                    for lease in leases_arr
+                    for lease in lease_list_response.get("leases")
                     if lease.get("name") == aw_dict.get("name")
                 ),
                 None,
             )
+
             # If the lease exists, then see if it needs to be updated
             if matching_lease:
                 if not (aw_dict.items() <= matching_lease.items()):
                     update = _call_blazar(
                         context,
-                        f"/leases/{aw.uuid}",
+                        f"/leases/{aw_dict.get('name')}",
                         method="put",
                         json=aw_dict,
                         allowed_status_codes=[200],
