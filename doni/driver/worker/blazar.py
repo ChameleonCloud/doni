@@ -245,6 +245,24 @@ class BlazarPhysicalHostWorker(BaseWorker):
 
         return WorkerResult.Success(result)
 
+    def import_existing(self, context: "RequestContext"):
+        existing_hosts = _call_blazar(context, "/os-hosts")["hosts"]
+        for host in existing_hosts:
+            existing_hosts.append(
+                {
+                    "uuid": host["hypervisor_hostname"],
+                    "name": host.get("node_name"),
+                    "properties": {
+                        "node_type": host.get("node_type"),
+                        "placement": {
+                            "node": host.get("placement.node"),
+                            "rack": host.get("placement.rack"),
+                        },
+                    },
+                }
+            )
+        return existing_hosts
+
 
 def _call_blazar(context, path, method="get", json=None, allowed_status_codes=[]):
     try:
