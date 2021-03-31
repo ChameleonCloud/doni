@@ -132,14 +132,14 @@ def _search_hosts_for_uuid(context: "RequestContext", hw_uuid: "str") -> dict:
     return matching_host
 
 
-def _search_leases_for_lease_id(existing_leases: dict, new_lease: dict) -> dict:
+def _search_leases_for_lease_id(existing_leases: dict, new_lease: dict) -> tuple:
     matching_lease = next(
         (
-            lease
-            for lease in existing_leases.get("leases")
+            (index, lease)
+            for index, lease in enumerate(existing_leases)
             if lease.get("name") == new_lease.get("name")
         ),
-        None,
+        (None, None),
     )
     return matching_lease
 
@@ -278,6 +278,22 @@ class BlazarPhysicalHostWorker(BaseWorker):
             result["lease_created_at"] = lease.get("created_at")
             return WorkerResult.Success(result)
 
+    def _blazar_lease_delete(self, context: "RequestContext", lease: "dict"):
+        """Create blazar lease. Return result dict."""
+        result = {}
+        try:
+            lease = _call_blazar(
+                context,
+                f"/leases/{lease.get('name')}",
+                method="delete",
+            )
+        except BlazarAPIError as exc:
+            if exc.code == 404:
+                # TODO Host id in lease doesn't exist, what do do?
+                return WorkerResult.Defer(result)
+        else:
+            return WorkerResult.Success(result)
+
     def process(
         self,
         context: "RequestContext",
@@ -310,33 +326,33 @@ class BlazarPhysicalHostWorker(BaseWorker):
             return host_result
 
         # Get all leases from blazar
-        existing_leases = self._blazar_lease_list(context)
-        lease_result = WorkerResult.Success({})
+        leases_to_check = self._blazar_lease_list(context).get("leases")
+
+        lease_results = []
         # Loop over all availability windows that Doni has for this hw item
         for aw in availability_windows or []:
             new_lease = _blazar_lease_requst_body(aw)
             # Check to see if lease name already exists in blazar
-            matching_lease = next(
-                (
-                    lease
-                    for lease in existing_leases.get("leases")
-                    if lease.get("name") == new_lease.get("name")
-                ),
-                None,
+            matching_index, matching_lease = _search_leases_for_lease_id(
+                leases_to_check, new_lease
             )
             if matching_lease:
+                # Pop each existing lease from the list. Any remaining at the end will be removed.
+                leases_to_check.pop(matching_index)
+                # Update case.
                 if not new_lease.items() <= matching_lease.items():
                     # If new lease is a subset of old_lease, we don't need to update
-                    lease_result = self._blazar_lease_update(context, new_lease)
+                    lease_results.append(self._blazar_lease_update(context, new_lease))
             else:
-                lease_result = self._blazar_lease_create(context, new_lease)
-            if isinstance(lease_result, WorkerResult.Defer):
-                # Return early on defer case
-                return lease_result
+                lease_results.append(self._blazar_lease_create(context, new_lease))
+
+        # Delete any leases that are in blazar, but not in the desired availability window.
+        for lease in leases_to_check:
+            print(lease)
+            self._blazar_lease_delete(context, lease)
 
         merged_result = {
             **host_result.payload,
-            **lease_result.payload,
         }
 
         return WorkerResult.Success(merged_result)

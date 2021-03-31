@@ -115,7 +115,7 @@ def _stub_blazar_host_new(path, method, json):
         assert json["node_name"] == "fake_name_1"
         return utils.MockResponse(201, {"created_at": "fake-created_at"})
     elif method == "get" and path == f"/leases":
-        return utils.MockResponse(200, {"leases": ["foo"]})
+        return utils.MockResponse(200, {"leases": []})
     else:
         return None
 
@@ -142,7 +142,7 @@ def _stub_blazar_host_exist(path, method, json, hw_list=None):
             409, {"created_at": "fake-created_at", "name": "{TEST_BLAZAR_HOST_ID}"}
         )
     elif method == "get" and path == f"/leases":
-        return utils.MockResponse(200, {"leases": ["bar"]})
+        return utils.MockResponse(200, {"leases": []})
     else:
         return None
 
