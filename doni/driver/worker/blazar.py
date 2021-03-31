@@ -143,82 +143,69 @@ class BlazarPhysicalHostWorker(BaseWorker):
         """TODO What does this do?"""
         return auth_conf.add_auth_opts(self.opts, service_type="reservation")
 
-    def _handle_blazar_hosts(
-        self,
-        context: "RequestContext",
-        hardware: "Hardware",
-        state_details: "dict" = {},
-    ) -> "dict":
-        """Subroutine to handle os-hosts calls.
-
-        Takes request context, hardware to add, and any state attached to the task.
-        Returns a dict containing hardware uuid and blazar ID for the affected host.
-        Returns created_at if created, and updated_at if updated.
-        """
-        # If we know the host_id, then update that host.
-        # If we don't then attempt to create it
-        # we'll always "touch" the host, because we can't tell if this was a host
-        # or a lease update request yet.
+    def _blazar_host_update(self, context, hardware, host_id) -> dict:
+        """Attempt to update existing host in blazar."""
         result = {}
-
-        host_id = state_details.get("blazar_host_id")
-        if host_id:
-            # Always try to update the host in blazar. We could add a precondition
-            # header based on e.g. timestamp if needed.
-            try:
-                update = _call_blazar(
-                    context,
-                    f"/os-hosts/{host_id}",
-                    method="put",
-                    json=_blazar_host_requst_body(hardware),
-                    allowed_status_codes=[200],
-                )
-                result["blazar_host_id"] = update.get("id")
-                result["host_updated_at"] = update.get("updated_at")
-            except BlazarAPIError as exc:
-                # TODO what error code does blazar return if the host has a lease already?
-                if exc.code == 404:
-                    host = _search_hosts_for_uuid(hardware.uuid)
-                    if host:
-                        # update stored host_id with match, and retry after defer
-                        result["blazar_host_id"] = host.get("id")
-                    else:
-                        # remove invalid stored host_id and retry after defer
-                        result["blazar_host_id"] = None
-                    return WorkerResult.Defer(result)
-                elif exc.code == 409:
-                    # Host cannot be updated, referenced by current lease
-                    return WorkerResult.Defer(result)
+        try:
+            blazar_host = _call_blazar(
+                context,
+                f"/os-hosts/{host_id}",
+                method="put",
+                json=_blazar_host_requst_body(hardware),
+                allowed_status_codes=[200],
+            )
+        except BlazarAPIError as exc:
+            # TODO what error code does blazar return if the host has a lease already?
+            if exc.code == 404:
+                blazar_host = _search_hosts_for_uuid(context, hardware.uuid)
+                if blazar_host:
+                    # update stored host_id with match, and retry after defer
+                    result["blazar_host_id"] = blazar_host.get("id")
                 else:
-                    raise
+                    # remove invalid stored host_id and retry after defer
+                    result["blazar_host_id"] = None
+                return WorkerResult.Defer(result)
+            elif exc.code == 409:
+                # Host cannot be updated, referenced by current lease
+                return WorkerResult.Defer(result)
+            else:
+                raise  # Unhandled exception
         else:
-            # We don't have a cached host_id, try to create a host. If the host exists,
-            # blazar will match the uuid, and the request will fail.
-            try:
-                host = _call_blazar(
-                    context,
-                    f"/os-hosts",
-                    method="post",
-                    json=_blazar_host_requst_body(hardware),
-                    allowed_status_codes=[201],
-                )
-                result["blazar_host_id"] = host.get("id")
-                result["host_created_at"] = host.get("created_at")
-            except BlazarAPIError as exc:
-                if exc.code == 404:
-                    # host isn't in ironic.
-                    return WorkerResult.Defer(result)
-                elif exc.code == 409:
-                    host = _search_hosts_for_uuid(hardware.uuid)
-                    if host:
-                        # update stored host_id with match, and retry after defer
-                        result["blazar_host_id"] = host.get("id")
-                    else:
-                        # got conflict despite no matching host,
-                        raise BlazarIsWrongError
-                    return WorkerResult.Defer(result)
+            # On sucess, cache host_id and updated time
+            result["blazar_host_id"] = blazar_host.get("id")
+            result["host_updated_at"] = blazar_host.get("updated_at")
+            return result
+
+    def _blazar_host_create(self, context, hardware) -> dict:
+        """Attempt to create new host in blazar."""
+        result = {}
+        try:
+            host = _call_blazar(
+                context,
+                f"/os-hosts",
+                method="post",
+                json=_blazar_host_requst_body(hardware),
+                allowed_status_codes=[201],
+            )
+        except BlazarAPIError as exc:
+            if exc.code == 404:
+                # host isn't in ironic.
+                return WorkerResult.Defer(result)
+            elif exc.code == 409:
+                host = _search_hosts_for_uuid(hardware.uuid)
+                if host:
+                    # update stored host_id with match, and retry after defer
+                    result["blazar_host_id"] = host.get("id")
                 else:
-                    raise
+                    # got conflict despite no matching host,
+                    raise BlazarIsWrongError
+                return WorkerResult.Defer(result)
+            else:
+                raise
+        else:
+            result["blazar_host_id"] = host.get("id")
+            result["host_created_at"] = host.get("created_at")
+            return result
 
     def _handle_leases(
         self,
@@ -293,8 +280,16 @@ class BlazarPhysicalHostWorker(BaseWorker):
         blazar uses nova.get_servers_per_host to check if there is an existing
         server with that name.
         """
-
-        self._handle_blazar_hosts(context, hardware, state_details)
+        # If we know the host_id, then update that host. Otherwise, attempt to create it.
+        host_id = state_details.get("blazar_host_id")
+        result = {}
+        if host_id:
+            # TODO: We always update the host. We should add a precondition of some kind.
+            result.update(self._blazar_host_update(context, hardware, host_id))
+        else:
+            # Without a cached host_id, try to create a host. If the host exists,
+            # blazar will match the uuid, and the request will fail.
+            result.update(self._blazar_host_create(context, hardware))
 
         self._handle_leases(context, availability_windows)
 
