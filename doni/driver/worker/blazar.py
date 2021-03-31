@@ -146,7 +146,7 @@ def _search_leases_for_lease_id(existing_leases: dict, new_lease: dict) -> tuple
 
 
 class BlazarPhysicalHostWorker(BaseWorker):
-    """This class handles the syncronization of physical hosts from Doni to Blazar."""
+    """This class handles the synchronization of physical hosts from Doni to Blazar."""
 
     opts = []
     opt_group = "blazar"
@@ -187,7 +187,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
             else:
                 raise  # Unhandled exception
         else:
-            # On sucess, cache host_id and updated time
+            # On success, cache host_id and updated time
             result["blazar_host_id"] = blazar_host.get("id")
             result["host_updated_at"] = blazar_host.get("updated_at")
             return WorkerResult.Success(result)
