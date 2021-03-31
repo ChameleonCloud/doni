@@ -36,6 +36,8 @@ def _get_blazar_adapter():
 
 
 class BlazarUnavailable(exception.DoniException):
+    """Exception for when the Blazar service cannot be contacted."""
+
     _msg_fmt = (
         "Could not contact Blazar API. Please check the service "
         "configuration. The precise error was: %(message)s"
@@ -43,18 +45,26 @@ class BlazarUnavailable(exception.DoniException):
 
 
 class BlazarIsWrongError(exception.DoniException):
+    """Exception for when the Blazar service is in a bad state of some kind."""
+
     _msg_fmt = "Blazar is in a bad state. " "The precise error was: %(message)s"
 
 
 class BlazarAPIError(exception.DoniException):
+    """Exception for an otherwise unhandled error passed from Blazar's API."""
+
     _msg_fmt = "Blazar responded with HTTP %(code)s: %(text)s"
 
 
 class BlazarAPIMalformedResponse(exception.DoniException):
+    """Exception for malformed response from Blazar's API."""
+
     _msg_fmt = "Blazar response malformed: %(text)s"
 
 
 class BlazarNodeProvisionStateTimeout(exception.DoniException):
+    """Exception for a timeout on updating a host's provisioning state."""
+
     _msg_fmt = (
         "Blazar node %(node)s timed out updating its provision state to %(state)s"
     )
@@ -93,15 +103,44 @@ def _blazar_lease_requst_body(aw: AvailabilityWindow) -> dict:
     return body_dict
 
 
+def _search_hosts_for_uuid(context: "RequestContext", hw_uuid: "str") -> dict:
+    """Look up host in blazar by hw_uuid.
+
+    If the blazar host id is uknown or otherwise incorrect, the only option
+    is to get the list of all hosts from blazar, then search for matching
+    hw_uuid.
+
+    Returns a dict with the matching host's properties, including blazar_host_id.
+    Returns None if not found.
+    """
+    host_list_response = _call_blazar(
+        context,
+        f"/os-hosts",
+        method="get",
+        json={},
+        allowed_status_codes=[200],
+    )
+    host_list = host_list_response.get("hosts")
+    matching_host = next(
+        (host for host in host_list if host.get("name") == hw_uuid),
+        None,
+    )
+    return matching_host
+
+
 class BlazarPhysicalHostWorker(BaseWorker):
+    """This class handles the syncronization of physical hosts from Doni to Blazar."""
+
     opts = []
     opt_group = "blazar"
 
     def register_opts(self, conf):
+        """TODO What does this do?"""
         conf.register_opts(self.opts, group=self.opt_group)
         auth_conf.register_auth_opts(conf, self.opt_group, service_type="reservation")
 
     def list_opts(self):
+        """TODO What does this do?"""
         return auth_conf.add_auth_opts(self.opts, service_type="reservation")
 
     def _handle_blazar_hosts(
@@ -116,22 +155,6 @@ class BlazarPhysicalHostWorker(BaseWorker):
         Returns a dict containing hardware uuid and blazar ID for the affected host.
         Returns created_at if created, and updated_at if updated.
         """
-
-        def _search_hosts_for_uuid(hw_uuid) -> dict:
-            host_list_response = _call_blazar(
-                context,
-                f"/os-hosts",
-                method="get",
-                json={},
-                allowed_status_codes=[200],
-            )
-            host_list = host_list_response.get("hosts")
-            matching_host = next(
-                (host for host in host_list if host.get("name") == hw_uuid),
-                None,
-            )
-            return matching_host
-
         # If we know the host_id, then update that host.
         # If we don't then attempt to create it
         # we'll always "touch" the host, because we can't tell if this was a host
