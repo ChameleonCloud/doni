@@ -104,22 +104,17 @@ class BlazarPhysicalHostWorker(BaseWorker):
     def list_opts(self):
         return auth_conf.add_auth_opts(self.opts, service_type="reservation")
 
-    def process(
+    def _handle_blazar_hosts(
         self,
         context: "RequestContext",
         hardware: "Hardware",
-        availability_windows: "list[AvailabilityWindow]" = None,
         state_details: "dict" = {},
-    ) -> "WorkerResult.Base":
-        """Main loop for Blazar sync worker.
+    ) -> "dict":
+        """Subroutine to handle os-hosts calls.
 
-        This method ensures that an up-to-date blazar host object exists for
-        each physical host in Doni's DB.
-
-        "name" must match the name used by nova to identify the node. In our case
-        it is the hardware uuid, as that is what ironic is passing to nova.
-        blazar uses nova.get_servers_per_host to check if there is an existing
-        server with that name.
+        Takes request context, hardware to add, and any state attached to the task.
+        Returns a dict containing hardware uuid and blazar ID for the affected host.
+        Returns created_at if created, and updated_at if updated.
         """
 
         def _search_hosts_for_uuid(hw_uuid) -> dict:
@@ -168,6 +163,9 @@ class BlazarPhysicalHostWorker(BaseWorker):
                         # remove invalid stored host_id and retry after defer
                         result["blazar_host_id"] = None
                     return WorkerResult.Defer(result)
+                elif exc.code == 409:
+                    # Host cannot be updated, referenced by current lease
+                    return WorkerResult.Defer(result)
                 else:
                     raise
         else:
@@ -185,9 +183,9 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 result["host_created_at"] = host.get("created_at")
             except BlazarAPIError as exc:
                 if exc.code == 404:
-                    # host isn't in ironic?
+                    # host isn't in ironic.
                     return WorkerResult.Defer(result)
-                if exc.code == 409:
+                elif exc.code == 409:
                     host = _search_hosts_for_uuid(hardware.uuid)
                     if host:
                         # update stored host_id with match, and retry after defer
@@ -199,6 +197,18 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 else:
                     raise
 
+    def _handle_leases(
+        self,
+        context: "RequestContext",
+        availability_windows: "list[AvailabilityWindow]" = None,
+    ):
+        """Subroutine to handle leases calls.
+
+        Takes the requst context, and a list of availability windows.
+        Returns a list of dicts, one dict per blazar lease. This contains
+        the lease uuid, the availability window uuid, created_at if created, and
+        updated_at if updated.
+        """
         # List of all leases from blazar.
         lease_list_response = _call_blazar(
             context,
@@ -243,9 +253,41 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 )
                 result["lease_created_at"] = lease.get("created_at")
 
+    def process(
+        self,
+        context: "RequestContext",
+        hardware: "Hardware",
+        availability_windows: "list[AvailabilityWindow]" = None,
+        state_details: "dict" = {},
+    ) -> "WorkerResult.Base":
+        """Main loop for Blazar sync worker.
+
+        This method ensures that an up-to-date blazar host object exists for
+        each physical host in Doni's DB.
+
+        "name" must match the name used by nova to identify the node. In our case
+        it is the hardware uuid, as that is what ironic is passing to nova.
+        blazar uses nova.get_servers_per_host to check if there is an existing
+        server with that name.
+        """
+
+        self._handle_blazar_hosts(context, hardware, state_details)
+
+        self._handle_leases(context, availability_windows)
+
         return WorkerResult.Success(result)
 
     def import_existing(self, context: "RequestContext"):
+        """Get all known external state managed by this worker.
+
+        This is an optional capability of a worker and supports an 'import' flow where existing
+        resources/state outside of the doni can be brought under doni's management.
+
+        The expected return type is a list of objects with a "uuid" and a "properties" key,
+        representing the UUID of the hardware the state corresponds to (or None if one
+        could not be reasonably determined and should be auto-assigned) and a set of
+        properties that should be imported for that hardware item.
+        """
         existing_hosts = _call_blazar(context, "/os-hosts")["hosts"]
         for host in existing_hosts:
             existing_hosts.append(
