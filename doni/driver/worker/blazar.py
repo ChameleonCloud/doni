@@ -70,6 +70,10 @@ class BlazarNodeProvisionStateTimeout(exception.DoniException):
     )
 
 
+class BlazarWorkerDefer(exception.DoniException):
+    """Signal to defer worker result."""
+
+
 def _blazar_host_requst_body(hw: "Hardware") -> dict:
     hw_props = hw.properties
     body_dict = {
@@ -128,6 +132,18 @@ def _search_hosts_for_uuid(context: "RequestContext", hw_uuid: "str") -> dict:
     return matching_host
 
 
+def _search_leases_for_lease_id(existing_leases: dict, new_lease: dict) -> dict:
+    matching_lease = next(
+        (
+            lease
+            for lease in existing_leases.get("leases")
+            if lease.get("name") == new_lease.get("name")
+        ),
+        None,
+    )
+    return matching_lease
+
+
 class BlazarPhysicalHostWorker(BaseWorker):
     """This class handles the syncronization of physical hosts from Doni to Blazar."""
 
@@ -143,7 +159,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
         """TODO What does this do?"""
         return auth_conf.add_auth_opts(self.opts, service_type="reservation")
 
-    def _blazar_host_update(self, context, hardware, host_id) -> dict:
+    def _blazar_host_update(self, context, hardware, host_id) -> WorkerResult:
         """Attempt to update existing host in blazar."""
         result = {}
         try:
@@ -174,9 +190,9 @@ class BlazarPhysicalHostWorker(BaseWorker):
             # On sucess, cache host_id and updated time
             result["blazar_host_id"] = blazar_host.get("id")
             result["host_updated_at"] = blazar_host.get("updated_at")
-            return result
+            return WorkerResult.Success(result)
 
-    def _blazar_host_create(self, context, hardware) -> dict:
+    def _blazar_host_create(self, context, hardware) -> WorkerResult:
         """Attempt to create new host in blazar."""
         result = {}
         try:
@@ -192,7 +208,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 # host isn't in ironic.
                 return WorkerResult.Defer(result)
             elif exc.code == 409:
-                host = _search_hosts_for_uuid(hardware.uuid)
+                host = _search_hosts_for_uuid(context, hardware.uuid)
                 if host:
                     # update stored host_id with match, and retry after defer
                     result["blazar_host_id"] = host.get("id")
@@ -205,20 +221,10 @@ class BlazarPhysicalHostWorker(BaseWorker):
         else:
             result["blazar_host_id"] = host.get("id")
             result["host_created_at"] = host.get("created_at")
-            return result
+            return WorkerResult.Success(result)
 
-    def _handle_leases(
-        self,
-        context: "RequestContext",
-        availability_windows: "list[AvailabilityWindow]" = None,
-    ):
-        """Subroutine to handle leases calls.
-
-        Takes the requst context, and a list of availability windows.
-        Returns a list of dicts, one dict per blazar lease. This contains
-        the lease uuid, the availability window uuid, created_at if created, and
-        updated_at if updated.
-        """
+    def _blazar_lease_list(self, context: "RequestContext"):
+        """Get list of all leases from blazar. Return dict of blazar response."""
         # List of all leases from blazar.
         lease_list_response = _call_blazar(
             context,
@@ -226,42 +232,51 @@ class BlazarPhysicalHostWorker(BaseWorker):
             method="get",
             allowed_status_codes=[200],
         )
-        print(f"lease_list_response: {lease_list_response}")
+        return lease_list_response
 
-        # Loop over all availability windows for this hw item that Doni has
-        for aw in availability_windows or []:
-
-            aw_dict = _blazar_lease_requst_body(aw)
-            # Check to see if lease name already exists in blazar
-            matching_lease = next(
-                (
-                    lease
-                    for lease in lease_list_response.get("leases")
-                    if lease.get("name") == aw_dict.get("name")
-                ),
-                None,
+    def _blazar_lease_update(self, context: "RequestContext", new_lease: "dict"):
+        """Update blazar lease if necessary. Return result dict."""
+        result = {}
+        try:
+            response = _call_blazar(
+                context,
+                f"/leases/{new_lease.get('name')}",
+                method="put",
+                json=new_lease,
+                allowed_status_codes=[200],
             )
+        except BlazarAPIError as exc:
+            if exc.code == 404:
+                # TODO lease ID doesn't exist, how to handle this case?
+                return WorkerResult.Defer(result)
+            elif exc.code == 409:
+                # TODO Lease update conflicts with another, how to handle this case?
+                return WorkerResult.Defer(result)
+        else:
+            result["lease_updated_at"] = response.get("updated_at")
+            return WorkerResult.Success(result)
 
-            # If the lease exists, then see if it needs to be updated
-            if matching_lease:
-                if not (aw_dict.items() <= matching_lease.items()):
-                    update = _call_blazar(
-                        context,
-                        f"/leases/{aw_dict.get('name')}",
-                        method="put",
-                        json=aw_dict,
-                        allowed_status_codes=[200],
-                    )
-                    result["lease_updated_at"] = update.get("updated_at")
-            else:
-                lease = _call_blazar(
-                    context,
-                    f"/leases",
-                    method="post",
-                    json=aw_dict,
-                    allowed_status_codes=[201],
-                )
-                result["lease_created_at"] = lease.get("created_at")
+    def _blazar_lease_create(self, context: "RequestContext", new_lease: "dict"):
+        """Create blazar lease. Return result dict."""
+        result = {}
+        try:
+            lease = _call_blazar(
+                context,
+                f"/leases",
+                method="post",
+                json=new_lease,
+                allowed_status_codes=[201],
+            )
+        except BlazarAPIError as exc:
+            if exc.code == 404:
+                # TODO Host id in lease doesn't exist, what do do?
+                return WorkerResult.Defer(result)
+            elif exc.code == 409:
+                # TODO Lease conflicts with another, how to handle this case?
+                return WorkerResult.Defer(result)
+        else:
+            result["lease_created_at"] = lease.get("created_at")
+            return WorkerResult.Success(result)
 
     def process(
         self,
@@ -282,18 +297,49 @@ class BlazarPhysicalHostWorker(BaseWorker):
         """
         # If we know the host_id, then update that host. Otherwise, attempt to create it.
         host_id = state_details.get("blazar_host_id")
-        result = {}
         if host_id:
             # TODO: We always update the host. We should add a precondition of some kind.
-            result.update(self._blazar_host_update(context, hardware, host_id))
+            host_result = self._blazar_host_update(context, hardware, host_id)
         else:
             # Without a cached host_id, try to create a host. If the host exists,
             # blazar will match the uuid, and the request will fail.
-            result.update(self._blazar_host_create(context, hardware))
+            host_result = self._blazar_host_create(context, hardware)
 
-        self._handle_leases(context, availability_windows)
+        if isinstance(host_result, WorkerResult.Defer):
+            # Return early on defer case
+            return host_result
 
-        return WorkerResult.Success(result)
+        # Get all leases from blazar
+        existing_leases = self._blazar_lease_list(context)
+        lease_result = WorkerResult.Success({})
+        # Loop over all availability windows that Doni has for this hw item
+        for aw in availability_windows or []:
+            new_lease = _blazar_lease_requst_body(aw)
+            # Check to see if lease name already exists in blazar
+            matching_lease = next(
+                (
+                    lease
+                    for lease in existing_leases.get("leases")
+                    if lease.get("name") == new_lease.get("name")
+                ),
+                None,
+            )
+            if matching_lease:
+                if not new_lease.items() <= matching_lease.items():
+                    # If new lease is a subset of old_lease, we don't need to update
+                    lease_result = self._blazar_lease_update(context, new_lease)
+            else:
+                lease_result = self._blazar_lease_create(context, new_lease)
+            if isinstance(lease_result, WorkerResult.Defer):
+                # Return early on defer case
+                return lease_result
+
+        merged_result = {
+            **host_result.payload,
+            **lease_result.payload,
+        }
+
+        return WorkerResult.Success(merged_result)
 
     def import_existing(self, context: "RequestContext"):
         """Get all known external state managed by this worker.
