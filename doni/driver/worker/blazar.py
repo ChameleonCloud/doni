@@ -102,7 +102,7 @@ def _blazar_lease_requst_body(aw: AvailabilityWindow) -> dict:
                 "min": 1,
                 "max": 1,
                 "hypervisor_properties": None,
-                "resource_properties": f"['==','$uid',{aw.hardware_uuid}]",
+                "resource_properties": f'["==","$uid","{aw.hardware_uuid}"]',
             },
         ],
     }
@@ -124,7 +124,6 @@ def _search_hosts_for_uuid(context: "RequestContext", hw_uuid: "str") -> dict:
         f"/os-hosts",
         method="get",
         json={},
-        allowed_status_codes=[200],
     )
     host_list = host_list_response.get("hosts")
     matching_host = next(
@@ -170,7 +169,6 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 f"/os-hosts/{host_id}",
                 method="put",
                 json=_blazar_host_requst_body(hardware),
-                allowed_status_codes=[200],
             )
         except BlazarAPIError as exc:
             # TODO what error code does blazar return if the host has a lease already?
@@ -203,11 +201,11 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 f"/os-hosts",
                 method="post",
                 json=_blazar_host_requst_body(hardware),
-                allowed_status_codes=[201],
             )
         except BlazarAPIError as exc:
             if exc.code == 404:
                 # host isn't in ironic.
+                result["message"] = "Host does not exist in Ironic yet"
                 return WorkerResult.Defer(result)
             elif exc.code == 409:
                 host = _search_hosts_for_uuid(context, hardware.uuid)
@@ -216,7 +214,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                     result["blazar_host_id"] = host.get("id")
                 else:
                     # got conflict despite no matching host,
-                    raise BlazarIsWrongError
+                    raise BlazarIsWrongError()
                 return WorkerResult.Defer(result)
             else:
                 raise
@@ -237,7 +235,6 @@ class BlazarPhysicalHostWorker(BaseWorker):
             context,
             "/leases",
             method="get",
-            allowed_status_codes=[200],
         )
         lease_list = lease_list_response.get("leases")
         filtered_list = filter(_allowed_prefix, lease_list)
@@ -252,7 +249,6 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 f"/leases/{new_lease.get('name')}",
                 method="put",
                 json=new_lease,
-                allowed_status_codes=[200],
             )
         except BlazarAPIError as exc:
             if exc.code == 404:
@@ -274,7 +270,6 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 f"/leases",
                 method="post",
                 json=new_lease,
-                allowed_status_codes=[201],
             )
         except BlazarAPIError as exc:
             if exc.code == 404:
