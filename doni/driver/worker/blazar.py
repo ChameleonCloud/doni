@@ -331,8 +331,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
             host_result = self._blazar_host_create(context, hardware)
 
         if isinstance(host_result, WorkerResult.Defer):
-            # Return early on defer case
-            return host_result
+            return host_result  # Return early on defer case
 
         # Get all leases from blazar
         leases_to_check = self._blazar_lease_list(context)
@@ -355,15 +354,16 @@ class BlazarPhysicalHostWorker(BaseWorker):
             else:
                 lease_results.append(self._blazar_lease_create(context, new_lease))
 
+        delete_results = []
         # Delete any leases that are in blazar, but not in the desired availability window.
         for lease in leases_to_check:
-            self._blazar_lease_delete(context, lease)
+            delete_results.append(self._blazar_lease_delete(context, lease))
 
-        merged_result = {
-            **host_result.payload,
-        }
+        for result in [lease_results, delete_results]:
+            if isinstance(result, WorkerResult.Defer):
+                return WorkerResult.Success(host_result)
 
-        return WorkerResult.Success(merged_result)
+        return host_result
 
     def import_existing(self, context: "RequestContext"):
         """Get all known external state managed by this worker.
