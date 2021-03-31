@@ -22,6 +22,8 @@ BLAZAR_API_VERSION = "1"
 BLAZAR_API_MICROVERSION = "1.0"
 _BLAZAR_ADAPTER = None
 
+AW_LEASE_PREFIX = "availability_window_"
+
 
 def _get_blazar_adapter():
     global _BLAZAR_ADAPTER
@@ -91,7 +93,7 @@ def _blazar_host_requst_body(hw: "Hardware") -> dict:
 
 def _blazar_lease_requst_body(aw: AvailabilityWindow) -> dict:
     body_dict = {
-        "name": f"availability_window_{aw.uuid}",
+        "name": f"{AW_LEASE_PREFIX}{aw.uuid}",
         "start_date": aw.start.isoformat(),
         "end_date": aw.end.isoformat(),
         "reservations": [
@@ -100,7 +102,7 @@ def _blazar_lease_requst_body(aw: AvailabilityWindow) -> dict:
                 "min": 1,
                 "max": 1,
                 "hypervisor_properties": None,
-                "resource_properties": '["==","$uid",{aw.hardware_uuid}]',
+                "resource_properties": f"['==','$uid',{aw.hardware_uuid}]",
             },
         ],
     }
@@ -225,6 +227,11 @@ class BlazarPhysicalHostWorker(BaseWorker):
 
     def _blazar_lease_list(self, context: "RequestContext"):
         """Get list of all leases from blazar. Return dict of blazar response."""
+
+        def _allowed_prefix(lease: "dict") -> "bool":
+            lease_name = lease.get("name")
+            return lease_name.startswith(AW_LEASE_PREFIX)
+
         # List of all leases from blazar.
         lease_list_response = _call_blazar(
             context,
@@ -232,7 +239,9 @@ class BlazarPhysicalHostWorker(BaseWorker):
             method="get",
             allowed_status_codes=[200],
         )
-        return lease_list_response
+        lease_list = lease_list_response.get("leases")
+        filtered_list = filter(_allowed_prefix, lease_list)
+        return list(filtered_list)
 
     def _blazar_lease_update(self, context: "RequestContext", new_lease: "dict"):
         """Update blazar lease if necessary. Return result dict."""
@@ -326,7 +335,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
             return host_result
 
         # Get all leases from blazar
-        leases_to_check = self._blazar_lease_list(context).get("leases")
+        leases_to_check = self._blazar_lease_list(context)
 
         lease_results = []
         # Loop over all availability windows that Doni has for this hw item
@@ -348,7 +357,6 @@ class BlazarPhysicalHostWorker(BaseWorker):
 
         # Delete any leases that are in blazar, but not in the desired availability window.
         for lease in leases_to_check:
-            print(lease)
             self._blazar_lease_delete(context, lease)
 
         merged_result = {

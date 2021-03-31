@@ -10,6 +10,7 @@ from oslo_utils import uuidutils
 from oslo_versionedobjects.fields import String
 
 from doni.driver.worker.blazar import (
+    AW_LEASE_PREFIX,
     BlazarPhysicalHostWorker,
     _blazar_host_requst_body,
     _blazar_lease_requst_body,
@@ -393,11 +394,22 @@ def test_update_lease(
     assert blazar_request.call_count == call_count
 
 
+@pytest.mark.parametrize(
+    "lease_prefix,result_type,call_count",
+    [
+        (AW_LEASE_PREFIX, WorkerResult.Success, 2),
+        ("foo_bar", WorkerResult.Success, 2),
+        (None, WorkerResult.Success, 3),
+    ],
+)
 def test_delete_lease(
     mocker,
     admin_context: "RequestContext",
     blazar_worker: "BlazarPhysicalHostWorker",
     database: "utils.DBFixtures",
+    lease_prefix,
+    result_type,
+    call_count,
 ):
     """Test delete of a lease that has been removed from the availability window list.
 
@@ -410,15 +422,26 @@ def test_delete_lease(
         1. The availability window list is empty
         2. Blazar has 1 lease stored
         3. Any lease with a name not matching an availability window's uuid should be removed.
-        4. TODO: how is this filtered so as not to remove all leases!
+    Cases:
+        1. lease in blazar and in AW list and prefix matches, shouldn't remove
+        2. lease in blazar, prefix doesn't match, shoudn't remove
+        3. Lease in blazar, but not in AW list, should remove
     """
     hw_obj = get_fake_hardware(database)
     fake_window = database.add_availability_window(hardware_uuid=hw_obj.uuid)
+
     aw_obj = AvailabilityWindow(**fake_window)
+    response_body = _blazar_lease_requst_body(aw_obj)
+
+    window_list = []
+    if lease_prefix:
+        response_body["name"] = f"{lease_prefix}{aw_obj.uuid}"
+        if lease_prefix == AW_LEASE_PREFIX:
+            # pass matching window list to worker
+            window_list = [aw_obj]
 
     def _stub_blazar_request(path, method=None, json=None, **kwargs):
         print(f"path: {path}; method: {method}")
-        response_body = _blazar_lease_requst_body(aw_obj)
 
         lease_response = _stub_blazar_lease_existing(path, method, json, response_body)
         if lease_response:
@@ -435,9 +458,9 @@ def test_delete_lease(
     result = blazar_worker.process(
         context=admin_context,
         hardware=hw_obj,
-        availability_windows=[],
+        availability_windows=window_list,
         state_details=TEST_STATE_DETAILS,
     )
 
-    assert isinstance(result, WorkerResult.Success)
-    assert blazar_request.call_count == 3
+    assert isinstance(result, result_type)
+    assert blazar_request.call_count == call_count
