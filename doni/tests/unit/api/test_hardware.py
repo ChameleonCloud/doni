@@ -75,6 +75,8 @@ def test_get_all_hardware(
     assert res.status_code == 200
     assert len(res.json["hardware"]) == 1
     _assert_hardware_json_ok(res.json["hardware"][0], _with_masked_sensitive_fields(hw))
+    for hardware in res.json["hardware"]:
+        _assert_hardware_has_workers(hardware)
     mock_authorize.assert_called_once_with("hardware:get", AnyContext())
 
 

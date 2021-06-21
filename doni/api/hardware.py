@@ -182,7 +182,12 @@ def get_all():
     authorize("hardware:get", ctx)
     serialize = hardware_serializer(with_private_fields=True)
     return {
-        "hardware": [serialize(hw) for hw in Hardware.list(ctx)],
+        "hardware": [
+            serialize(
+                    hw,
+                    worker_tasks=WorkerTask.list_for_hardware(ctx, hw.uuid))
+            for hw in Hardware.list(ctx)
+        ],
     }
 
 
