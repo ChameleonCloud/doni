@@ -13,7 +13,7 @@ exclude = ["doni/tests"]
 # Kolla containers currently use 3.6, this can eventually be updated to 3.8
 python = "^3.6"
 Flask = "^1.1.1"
-importlib-metadata = { version = "^0.20", python = "<3.7" }
+importlib-metadata = { version = "^4.6", python = "<3.7" }
 "oslo.config" = "^6.11.3"
 "oslo.db" = "^5.0.2"
 stevedore = "^1.31.0"
