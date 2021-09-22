@@ -305,16 +305,28 @@ def _do_port_updates(context, ironic_uuid, interfaces) -> dict:
     desired = set(ifaces_by_mac.keys())
 
     def _desired_port_state(iface):
-        return {
+        body = {
             "extra": {
                 "name": iface.get("name"),
             },
+        }
+
+        local_link = {
             "local_link_connection": {
                 "switch_id": iface.get("switch_id"),
                 "port_id": iface.get("switch_port_id"),
                 "switch_info": iface.get("switch_info"),
-            },
+            }
         }
+
+        if (
+            iface.get("switch_id")
+            or iface.get("switch_port_id")
+            or iface.get("switch_info")
+        ):
+            body.update(local_link)
+
+        return body
 
     for iface_to_add in desired - existing:
         iface = ifaces_by_mac[iface_to_add]
