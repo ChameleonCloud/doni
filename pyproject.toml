@@ -12,7 +12,7 @@ exclude = ["doni/tests"]
 [tool.poetry.dependencies]
 # Kolla containers currently use 3.6, this can eventually be updated to 3.8
 python = "^3.6"
-Flask = "^1.1.1"
+Flask = "^2.0.1"
 importlib-metadata = { version = "^0.20", python = "<3.7" }
 "oslo.config" = "^6.11.3"
 "oslo.db" = "^5.0.2"
