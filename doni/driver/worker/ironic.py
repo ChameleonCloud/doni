@@ -309,22 +309,15 @@ def _do_port_updates(context, ironic_uuid, interfaces) -> dict:
             "extra": {
                 "name": iface.get("name"),
             },
+            "local_link_connection": {},
         }
 
-        local_link = {
-            "local_link_connection": {
+        if iface.get("switch_id") and iface.get("switch_port_id"):
+            body["local_link_connection"] = {
                 "switch_id": iface.get("switch_id"),
                 "port_id": iface.get("switch_port_id"),
-                "switch_info": iface.get("switch_info"),
+                "switch_info": iface.get("switch_info", ""),
             }
-        }
-
-        if (
-            iface.get("switch_id")
-            or iface.get("switch_port_id")
-            or iface.get("switch_info")
-        ):
-            body.update(local_link)
 
         return body
 

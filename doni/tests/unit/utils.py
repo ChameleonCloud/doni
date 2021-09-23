@@ -130,9 +130,12 @@ class DBFixtures(object):
         fake_hw = get_test_hardware(**hardware_kwargs)
         # ID will be auto-assigned by DB
         fake_hw.pop("id")
-        self._hardwares.append(
-            self.db.create_hardware(fake_hw, initial_worker_state=initial_worker_state)
+        db_hw = self.db.create_hardware(
+            fake_hw, initial_worker_state=initial_worker_state
         )
+        self._hardwares.append(db_hw)
+        # Copy auto-generated fields
+        fake_hw["created_at"] = db_hw.created_at
         return fake_hw
 
     def add_availability_window(self, **window_kwargs) -> dict:
