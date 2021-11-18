@@ -216,10 +216,12 @@ class IronicWorker(BaseWorker):
     ) -> "WorkerResult.Base":
         hw_props = hardware.properties
 
-        capabilities_list = []
-        for key, value in hw_props.get("baremetal_capabilities").items():
-            capabilities_list.append(f"{key}:{value}")
-        capabilities_string = ','.join(capabilities_list)
+        capabilities_string = ",".join(
+            [
+                f"{key}:{value}"
+                for key, value in hw_props.get("baremetal_capabilities").items()
+            ]
+        )
 
         desired_state = {
             "uuid": hardware.uuid,
