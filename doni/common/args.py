@@ -41,6 +41,7 @@ NUMBER = {"type": "number"}  # can be integer or floating-point
 BOOLEAN = {"type": "boolean"}
 DATETIME = {"type": "string", "format": "date-time"}
 UUID = {"type": "string", "format": "uuid"}
+EMAIL = {"type": "string", "format": "email"}
 PORT_RANGE = {"type": "integer", "minimum": 1, "maximum": 65536}
 HOST_OR_IP = {
     "anyOf": [
@@ -50,24 +51,6 @@ HOST_OR_IP = {
     ]
 }
 CPU_ARCH = {"type": "string", "enum": ["x86_64", "aarch64"]}
-NETWORK_DEVICE = {
-    "type": "object",
-    "properties": {
-        "name": STRING,
-        "enabled": BOOLEAN,
-        # There is no mac_address format in jsonschema yet[1]
-        # [1]: https://github.com/json-schema-org/json-schema-spec/issues/540
-        "mac_address": STRING,
-        "vendor": STRING,
-        "model": STRING,
-        "switch_id": STRING,
-        "switch_port_id": STRING,
-        "switch_info": STRING,
-        "pxe_enabled": BOOLEAN,
-    },
-    "required": ["name", "mac_address"],
-    "additionalProperties": False,
-}
 PATCH = {
     "type": "array",
     "items": {

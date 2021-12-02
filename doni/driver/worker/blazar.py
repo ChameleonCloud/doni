@@ -498,4 +498,13 @@ def _call_blazar(context, path, method="get", json=None, allowed_status_codes=[]
 
 
 class BlazarDeviceWorker(BaseWorker):
-    pass
+    worker_fields = [
+        WorkerField(
+            "blazar_device_driver",
+            required=True,
+            description=(
+                "Which Blazar device driver plugin to use to make the device "
+                "reservable."
+            ),
+        )
+    ]

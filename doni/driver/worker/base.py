@@ -27,12 +27,10 @@ class BaseWorker(abc.ABC):
     """A base interface implementing common functions for Driver Interfaces.
 
     Attributes:
-        worker_type (str): The name of the worker type.
         fields (list[WorkerField]): A list of fields supported and/or required
             by the worker.
     """
 
-    worker_type = "base"
     fields: "list[WorkerField]" = []
     opts: "list[Opt]" = []
     opt_group: str = ""

@@ -31,7 +31,12 @@ class BaseHardwareType(abc.ABC):
             this hardware type.
         default_fields (list[WorkerField]): A list of worker fields that apply
             to this hardware type generically.
+        worker_overrides (dict): A dict of worker field names to the values that should
+            be overridden on the worker. This allows a hardware type to require that
+            a given worker field always has some set value, and prohibits the end-user
+            from choosing a different value.
     """
 
     enabled_workers: "list[str]" = ()
     default_fields: "list[WorkerField]" = []
+    worker_overrides: "dict" = {}

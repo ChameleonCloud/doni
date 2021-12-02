@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Mapping
-    from doni.driver.hardware_type import HardwareType
-    from doni.worker import BaseWorker
+    from doni.driver.hardware_type.base import BaseHardwareType
+    from doni.driver.worker.base import BaseWorker
 
 
 LOG = log.getLogger(__name__)
@@ -52,7 +52,7 @@ def worker_types() -> "Mapping[str,BaseWorker]":
     return _get_all_drivers(WorkerTypeFactory())
 
 
-def get_hardware_type(hardware_type) -> "HardwareType":
+def get_hardware_type(hardware_type) -> "BaseHardwareType":
     """Get a hardware type instance by name.
 
     Args:
@@ -70,7 +70,7 @@ def get_hardware_type(hardware_type) -> "HardwareType":
         raise exception.DriverNotFound(driver_name=hardware_type)
 
 
-def hardware_types() -> "Mapping[str,HardwareType]":
+def hardware_types() -> "Mapping[str,BaseHardwareType]":
     """Get all hardware types.
 
     Returns:

@@ -102,10 +102,15 @@ class Connection(object):
         for worker_type in hardware_type.enabled_workers:
             if worker_type not in enabled_worker_types:
                 continue
-            # Add in default fields
             for field in enabled_worker_types[worker_type].fields:
+                # Add in default fields
                 if field.default and field.name not in values:
                     values["properties"].setdefault(field.name, field.default)
+                # Add in overrides from hardware type
+                if field.name in hardware_type.worker_overrides:
+                    values["properties"][field.name] = hardware_type.worker_overrides[
+                        field.name
+                    ]
             task = models.WorkerTask()
             task.update(
                 {
@@ -147,9 +152,14 @@ class Connection(object):
         with _session_for_write() as session:
             query = self._hardware_by_uuid(session, hardware_uuid)
             try:
-                count = query.update(values)
-                if count != 1:
-                    raise exception.HardwareNotFound(hardware=hardware_uuid)
+                hardware = query.one()
+                hardware_type = driver_factory.get_hardware_type(hardware.hardware_type)
+                # Prevent updates to overridden fields
+                for field in hardware_type.worker_overrides.keys():
+                    del values[field]
+                hardware.update(values)
+            except NoResultFound:
+                raise exception.HardwareNotFound(hardware=hardware_uuid)
             except db_exc.DBDuplicateEntry as exc:
                 if "name" in exc.columns:
                     raise exception.HardwareDuplicateName(name=values["name"])
