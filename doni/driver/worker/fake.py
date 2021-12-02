@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
-from doni.worker import BaseWorker, WorkerField, WorkerResult
+from doni.driver.worker.base import BaseWorker
+from doni.worker import WorkerField, WorkerResult
 
 if TYPE_CHECKING:
     from doni.common.context import RequestContext

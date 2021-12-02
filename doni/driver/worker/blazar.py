@@ -11,8 +11,9 @@ from pytz import UTC
 
 from doni.common import args, exception, keystone
 from doni.conf import auth as auth_conf
+from doni.driver.worker.base import BaseWorker
 from doni.objects.availability_window import AvailabilityWindow
-from doni.worker import BaseWorker, WorkerField, WorkerResult
+from doni.worker import WorkerField, WorkerResult
 
 if TYPE_CHECKING:
     from doni.common.context import RequestContext
@@ -494,3 +495,7 @@ def _call_blazar(context, path, method="get", json=None, allowed_status_codes=[]
         return resp.json() if resp.text else None
     except Exception:
         raise BlazarAPIMalformedResponse(text=shorten(resp.text, width=50))
+
+
+class BlazarDeviceWorker(BaseWorker):
+    pass

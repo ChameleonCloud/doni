@@ -11,7 +11,8 @@ from oslo_log import log
 
 from doni.common import args, exception, keystone
 from doni.conf import auth as auth_conf
-from doni.worker import BaseWorker, WorkerField, WorkerResult
+from doni.driver.worker.base import BaseWorker
+from doni.worker import WorkerField, WorkerResult
 
 if TYPE_CHECKING:
     from doni.common.context import RequestContext
@@ -376,7 +377,9 @@ def _do_port_updates(context, ironic_uuid, interfaces) -> dict:
     ifaces_by_mac = {i["mac_address"].lower(): i for i in interfaces}
     existing = set(ports_by_mac.keys())
     # Ignore interfaces not marked as enabled
-    desired = set(mac for mac, iface in ifaces_by_mac.items() if iface.get("enabled", True))
+    desired = set(
+        mac for mac, iface in ifaces_by_mac.items() if iface.get("enabled", True)
+    )
 
     def _desired_port_state(iface):
         body = {
@@ -405,7 +408,9 @@ def _do_port_updates(context, ironic_uuid, interfaces) -> dict:
 
     for iface_to_update in desired & existing:
         port = ports_by_mac[iface_to_update]
-        existing_state = {k: port[k] for k in ["extra", "local_link_connection", "pxe_enabled"]}
+        existing_state = {
+            k: port[k] for k in ["extra", "local_link_connection", "pxe_enabled"]
+        }
         desired_state = _desired_port_state(ifaces_by_mac[iface_to_update])
         _normalize_for_patch(existing_state["extra"], desired_state["extra"])
         _normalize_for_patch(

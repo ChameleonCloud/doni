@@ -57,13 +57,17 @@ doni-worker = "doni.cmd.worker:main"
 sqlalchemy = "doni.db.migration"
 
 [tool.poetry.plugins."doni.driver.hardware_type"]
-fake-hardware = "doni.driver.hardware_type:Fake"
-baremetal = "doni.driver.hardware_type:Baremetal"
+fake-hardware = "doni.driver.hardware_type.fake:Fake"
+baremetal = "doni.driver.hardware_type.baremetal:Baremetal"
+device = "doni.driver.hardware_type.device:Device"
 
 [tool.poetry.plugins."doni.driver.worker_type"]
+balena = "doni.driver.worker.balena:BalenaWorker"
 "blazar.physical_host" = "doni.driver.worker.blazar:BlazarPhysicalHostWorker"
+"blazar.device" = "doni.driver.worker.blazar:BlazarDeviceWorker"
 fake-worker = "doni.driver.worker.fake:FakeWorker"
 ironic = "doni.driver.worker.ironic:IronicWorker"
+tunelo = "doni.driver.worker.tunelo:TuneloWorker"
 
 [tool.poetry.plugins."oslo.config.opts"]
 doni = "doni.conf.opts:list_opts"
