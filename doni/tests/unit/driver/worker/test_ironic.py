@@ -140,7 +140,9 @@ def ironic_expected_node_body(hardware: "Hardware", overrides={}):
         "cpu_arch": props["cpu_arch"],
     }
     if props["baremetal_capabilities"]:
-        node_properties["capabilities"] = props["baremetal_capabilities"]
+        node_properties["capabilities"] = ",".join(
+            [f"{key}:{value}" for key, value in props["baremetal_capabilities"].items()]
+        )
 
     node_body = {
         "uuid": hardware.uuid,

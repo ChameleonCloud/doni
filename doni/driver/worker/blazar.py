@@ -103,6 +103,8 @@ def _blazar_host_state(hw: "Hardware") -> dict:
         body_dict["node_type"] = hw_props.get("node_type")
     if hw_props.get("cpu_arch"):
         body_dict["cpu_arch"] = hw_props.get("cpu_arch")
+    if hw_props.get("su_factor"):
+        body_dict["su_factor"] = hw_props.get("su_factor")
     if placement_props.get("node"):
         body_dict["placement.node"] = placement_props.get("node")
     if placement_props.get("rack"):
@@ -178,6 +180,12 @@ class BlazarPhysicalHostWorker(BaseWorker):
             "placement",
             schema=PLACEMENT_SCHEMA,
             description=("Information about the physical placement of the node."),
+        ),
+        WorkerField(
+            "su_factor",
+            schema=args.NUMBER,
+            description="The service unit (SU) hourly cost of the resource.",
+            default=1.0,
         ),
     ]
 
@@ -457,6 +465,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                             "node": host.get("placement.node"),
                             "rack": host.get("placement.rack"),
                         },
+                        "su_factor": host.get("su_factor"),
                     },
                 }
             )

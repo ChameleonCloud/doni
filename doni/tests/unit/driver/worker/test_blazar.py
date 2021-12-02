@@ -264,7 +264,11 @@ def test_no_updates_to_host(
             method,
             json,
             hw_list,
-            host_details={"uid": TEST_HARDWARE_UUID, "node_name": "fake_name_1"},
+            host_details={
+                "uid": TEST_HARDWARE_UUID,
+                "node_name": "fake_name_1",
+                "su_factor": 1.0,
+            },
         )
         if host_response:
             return host_response

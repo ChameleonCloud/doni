@@ -37,6 +37,7 @@ def uuid(name, value) -> "Optional[str]":
 # Some JSON schema helpers
 STRING = {"type": "string"}
 INTEGER = {"type": "integer"}
+NUMBER = {"type": "number"}  # can be integer or floating-point
 BOOLEAN = {"type": "boolean"}
 DATETIME = {"type": "string", "format": "date-time"}
 UUID = {"type": "string", "format": "uuid"}
