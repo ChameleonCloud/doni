@@ -1,5 +1,3 @@
-from collections import namedtuple
-from functools import wraps
 from textwrap import shorten
 import typing
 
@@ -41,7 +39,6 @@ def ks_service_requestor(
     microversion=None,
     parse_error=None,
 ) -> "Callable[[RequestContext, str, str, dict, list[int]], Union[Optional[dict],Optional[list]]]":
-    @wraps
     def _request(context, path, method="get", json=None, allowed_status_codes=[]):
         try:
             blazar = client_factory()

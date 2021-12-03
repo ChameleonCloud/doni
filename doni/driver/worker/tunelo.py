@@ -3,8 +3,9 @@ import logging
 import typing
 
 from doni.common import keystone
-from doni.driver.worker.base import BaseWorker
+from doni.conf import auth as auth_conf
 from doni.driver.util import ks_service_requestor
+from doni.driver.worker.base import BaseWorker
 from doni.worker import WorkerResult
 
 if typing.TYPE_CHECKING:
@@ -28,10 +29,17 @@ def _get_tunelo_adapter():
     return _TUNELO_ADAPTER
 
 
-tunelo_request = ks_service_requestor("Tunelo", _get_tunelo_adapter)
-
-
 class TuneloWorker(BaseWorker):
+    opts = []
+    opt_group = "tunelo"
+
+    def register_opts(self, conf):
+        conf.register_opts(self.opts, group=self.opt_group)
+        auth_conf.register_auth_opts(conf, self.opt_group, service_type="tunnel")
+
+    def list_opts(self):
+        return auth_conf.add_auth_opts(self.opts, service_type="tunnel")
+
     def process(
         self,
         context: "RequestContext",
@@ -47,7 +55,7 @@ class TuneloWorker(BaseWorker):
         # Mapping of channel UUIDs to their existing representations
         existing_channels = {
             c["uuid"]: c
-            for c in tunelo_request(context, "/channels", method="get")["channels"]
+            for c in self._call_tunelo(context, "/channels", method="get")["channels"]
         }
 
         # Channels which exist but we have no record of
@@ -62,7 +70,7 @@ class TuneloWorker(BaseWorker):
                     # Nothing to do, move on
                     continue
                 else:
-                    tunelo_request(
+                    self._call_tunelo(
                         context, f"/channels/{channel_uuid}", method="delete"
                     )
                     LOG.info(
@@ -78,14 +86,23 @@ class TuneloWorker(BaseWorker):
                     "public_key": channel_props.get("public_key"),
                 },
             }
-            channel = tunelo_request(
-                context, "/channels", method="post", data=json.dumps(channel_req)
+            channel = self._call_tunelo(
+                context, "/channels", method="post", json=json.dumps(channel_req)
             )
             LOG.info(f"Created new {channel_name} channel at {channel['uuid']}")
             payload[channel_name] = channel["uuid"]
 
         for channel_uuid in dangling_channels:
-            tunelo_request(f"/channels/{channel_uuid}", method="delete")
+            self._call_tunelo(f"/channels/{channel_uuid}", method="delete")
             LOG.info(f"Deleted dangling channel {channel_uuid}")
 
         return WorkerResult.Success(payload)
+
+    def _differs(self, chan_a, chan_b):
+        for key in ["channel_type", "public_key"]:
+            if chan_a.get(key) != chan_b.get(key):
+                return True
+        return False
+
+    def _call_tunelo(self, *args, **kwargs):
+        return ks_service_requestor("Tunelo", _get_tunelo_adapter)(*args, **kwargs)
