@@ -1,6 +1,5 @@
 """Sync worker to update Blazar from Doni."""
 from datetime import datetime
-from re import I
 from textwrap import shorten
 from typing import TYPE_CHECKING
 
