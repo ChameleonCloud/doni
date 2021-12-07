@@ -70,7 +70,7 @@ def get_fake_hardware(database: "utils.DBFixtures"):
     return Hardware(**db_hw)
 
 
-def get_mocked_tunelo(mocker, request_fn):
+def mock_tunelo(mocker, request_fn):
     """Patch method to mock Tunelo client."""
     mock_adapter = mock.MagicMock()
     mock_request = mock_adapter.request
@@ -87,6 +87,37 @@ def test_new_channel(
     tunelo_worker: "TuneloWorker",
     database: "utils.DBFixtures",
 ):
+    fake_channel_uuid = "fake-uuid"
+
+    def _stub_tunelo_request(path, method=None, json=None, **kwargs):
+        if method == "get" and path == "/channels":
+            return utils.MockResponse(200, {"channels": []})
+        if method == "post" and path == "/channels":
+            return utils.MockResponse(
+                201, {"uuid": fake_channel_uuid, "channel_type": "wireguard"}
+            )
+        raise NotImplementedError(f"Unexpected request signature: {method} {path}")
+
+    mock_tunelo(mocker, _stub_tunelo_request)
+
+    result = tunelo_worker.process(
+        context=admin_context,
+        hardware=get_fake_hardware(database),
+        state_details={},
+    )
+
+    assert isinstance(result, WorkerResult.Success)
+    assert result.payload["channels"]["user"] == fake_channel_uuid
+
+
+def test_update_channel_no_diff(
+    mocker,
+    admin_context: "RequestContext",
+    tunelo_worker: "TuneloWorker",
+    database: "utils.DBFixtures",
+):
+    fake_channel_uuid = "fake-uuid"
+
     def _stub_tunelo_request(path, method=None, json=None, **kwargs):
         if method == "get" and path == "/channels":
             return utils.MockResponse(
@@ -94,23 +125,113 @@ def test_new_channel(
                 {
                     "channels": [
                         {
-                            "uuid": "",
+                            "uuid": fake_channel_uuid,
                             "channel_type": "wireguard",
-                            "properties": {
-                                "public_key": "fake-public_key",
-                            },
+                            "properties": {"public_key": "fake-public_key"},
                         }
                     ]
                 },
             )
         raise NotImplementedError(f"Unexpected request signature: {method} {path}")
 
-    get_mocked_tunelo(mocker, _stub_tunelo_request)
+    mock_tunelo(mocker, _stub_tunelo_request)
+
     result = tunelo_worker.process(
         context=admin_context,
         hardware=get_fake_hardware(database),
-        state_details={},
+        state_details={"channels": {"user": fake_channel_uuid}},
     )
 
-    # assert isinstance(result, result_type)
-    # assert result.payload.get("host_created_at") == host_created_at
+    assert isinstance(result, WorkerResult.Success)
+    assert result.payload["channels"]["user"] == fake_channel_uuid
+
+
+def test_update_channel_diff(
+    mocker,
+    admin_context: "RequestContext",
+    tunelo_worker: "TuneloWorker",
+    database: "utils.DBFixtures",
+):
+    fake_channel_uuid = "fake-uuid"
+    fake_new_channel_uuid = "fake-new-uuid"
+
+    def _stub_tunelo_request(path, method=None, json=None, **kwargs):
+        if method == "get" and path == "/channels":
+            return utils.MockResponse(
+                200,
+                {
+                    "channels": [
+                        {
+                            "uuid": fake_channel_uuid,
+                            "channel_type": "wireguard",
+                            "properties": {"public_key": "DIFFERENT-public_key"},
+                        }
+                    ]
+                },
+            )
+        elif method == "delete" and path == "/channels/fake-uuid":
+            return utils.MockResponse(204)
+        elif method == "post" and path == "/channels":
+            return utils.MockResponse(
+                200,
+                {
+                    "uuid": fake_new_channel_uuid,
+                    "channel_type": "wireguard",
+                    "properties": {"public_key": "fake-public_key"},
+                },
+            )
+        raise NotImplementedError(f"Unexpected request signature: {method} {path}")
+
+    mock_tunelo(mocker, _stub_tunelo_request)
+
+    result = tunelo_worker.process(
+        context=admin_context,
+        hardware=get_fake_hardware(database),
+        state_details={"channels": {"user": fake_channel_uuid}},
+    )
+
+    assert isinstance(result, WorkerResult.Success)
+    assert result.payload["channels"]["user"] == fake_new_channel_uuid
+
+
+def test_delete_dangling_channels(
+    mocker,
+    admin_context: "RequestContext",
+    tunelo_worker: "TuneloWorker",
+    database: "utils.DBFixtures",
+):
+    fake_channel_uuid = "fake-uuid"
+
+    def _stub_tunelo_request(path, method=None, json=None, **kwargs):
+        if method == "get" and path == "/channels":
+            return utils.MockResponse(
+                200,
+                {
+                    "channels": [
+                        {
+                            "uuid": fake_channel_uuid,
+                            "channel_type": "wireguard",
+                            "properties": {"public_key": "fake-public_key"},
+                        },
+                        # This one should get deleted
+                        {
+                            "uuid": "dangling-fake-uuid",
+                            "channel_type": "wireguard",
+                            "properties": {"public_key": "dangling-public_key"},
+                        },
+                    ]
+                },
+            )
+        elif method == "delete" and path == "/channels/dangling-fake-uuid":
+            return utils.MockResponse(204)
+        raise NotImplementedError(f"Unexpected request signature: {method} {path}")
+
+    mock_tunelo(mocker, _stub_tunelo_request)
+
+    result = tunelo_worker.process(
+        context=admin_context,
+        hardware=get_fake_hardware(database),
+        state_details={"channels": {"user": fake_channel_uuid}},
+    )
+
+    assert isinstance(result, WorkerResult.Success)

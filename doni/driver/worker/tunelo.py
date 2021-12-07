@@ -47,10 +47,8 @@ class TuneloWorker(BaseWorker):
         availability_windows: "list[AvailabilityWindow]" = None,
         state_details: "dict" = None,
     ) -> "WorkerResult.Base":
-        payload = {}
-
         # Mapping of channel names to channel UUIDs
-        channel_state = state_details.get("channels", {})
+        channel_state = state_details.setdefault("channels", {})
 
         # Mapping of channel UUIDs to their existing representations
         existing_channels = {
@@ -59,14 +57,14 @@ class TuneloWorker(BaseWorker):
         }
 
         # Channels which exist but we have no record of
-        dangling_channels = set(existing_channels.keys()) - set(channel_state.keys())
+        dangling_channels = set(existing_channels.keys()) - set(channel_state.values())
 
         for channel_name, channel_props in hardware.properties["channels"].items():
             channel_uuid = channel_state.get(channel_name)
             # Recreate if representation differs
             if channel_uuid:
-                existing_props = existing_channels[channel_uuid]["properties"]
-                if not self._differs(channel_props, existing_props):
+                existing = existing_channels[channel_uuid]
+                if not self._differs(channel_props, existing):
                     # Nothing to do, move on
                     continue
                 else:
@@ -90,18 +88,19 @@ class TuneloWorker(BaseWorker):
                 context, "/channels", method="post", json=json.dumps(channel_req)
             )
             LOG.info(f"Created new {channel_name} channel at {channel['uuid']}")
-            payload[channel_name] = channel["uuid"]
+            channel_state[channel_name] = channel["uuid"]
 
         for channel_uuid in dangling_channels:
-            self._call_tunelo(f"/channels/{channel_uuid}", method="delete")
+            self._call_tunelo(context, f"/channels/{channel_uuid}", method="delete")
             LOG.info(f"Deleted dangling channel {channel_uuid}")
 
-        return WorkerResult.Success(payload)
+        return WorkerResult.Success(state_details)
 
-    def _differs(self, chan_a, chan_b):
-        for key in ["channel_type", "public_key"]:
-            if chan_a.get(key) != chan_b.get(key):
-                return True
+    def _differs(self, chan_a, tunelo_channel):
+        if chan_a["channel_type"] != tunelo_channel["channel_type"]:
+            return True
+        elif chan_a["public_key"] != tunelo_channel["properties"]["public_key"]:
+            return True
         return False
 
     def _call_tunelo(self, *args, **kwargs):
