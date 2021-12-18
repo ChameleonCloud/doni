@@ -6,6 +6,7 @@ on:
       - "main"
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
   trigger_build:
@@ -16,7 +17,7 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           repository: ChameleonCloud/kolla-containers
-          event-type: doni-build
+          event-type: build
           client-payload: |
             '{
               "kolla_build_profile": "doni",
