@@ -12,13 +12,13 @@ jobs:
   trigger_build:
     runs-on: ubuntu-latest
     steps:
-      - name: Repository Dispatch
-        uses: peter-evans/repository-dispatch@v1
+      - name: Invoke workflow in another repo with inputs
+        uses: benc-uk/workflow-dispatch@v1
         with:
+          workflow: ci
+          repo: ChameleonCloud/kolla-containers
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          repository: ChameleonCloud/kolla-containers
-          event-type: build
-          client-payload: |
+          inputs: |
             '{
               "kolla_build_profile": "doni",
               "push": "yes",
