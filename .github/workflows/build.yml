@@ -1,64 +1,26 @@
-name: build and push container
+name: execute kolla build
 
 on:
   push:
     branches:
-      - "**"
+      - "main"
     tags:
       - "v*"
-  pull_request:
-    branches:
-      - "main"
 
 jobs:
-  build_and_push:
+  trigger_build:
     runs-on: ubuntu-latest
-    env:
-      DOCKER_REGISTRY: docker.chameleoncloud.org
-      DOCKER_IMAGE: docker.chameleoncloud.org/doni
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Docker meta
-        id: docker_meta
-        uses: crazy-max/ghaction-docker-meta@v1
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v1
         with:
-          images: ${{ env.DOCKER_IMAGE }}
-          tag-sha: true
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-      - name: Cache Docker layers
-        uses: actions/cache@v2.1.4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-      - name: Login to Chameleon Repo
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v1
-        with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ secrets.CC_REGISTRY_USERNAME }}
-          password: ${{ secrets.CC_REGISTRY_TOKEN }}
-          logout: true
-      - name: Build and push
-        uses: docker/build-push-action@v2
-        id: docker_build
-        with:
-          context: .
-          file: ./docker/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.docker_meta.outputs.tags }}
-          labels: ${{ steps.docker_meta.outputs.labels }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new
-      - name: Move cache
-        # Temp fix
-        # https://github.com/docker/build-push-action/issues/252
-        # https://github.com/moby/buildkit/issues/1896
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-      - name: Print Image digest
-        run: echo ${{ steps.docker_build.outputs.digest }}
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          repository: ChameleonCloud/kolla-containers
+          event-type: doni-build
+          client-payload: |
+            '{
+              "kolla_build_profile": "doni",
+              "push": "yes",
+              "ref": "${{ github.ref }}",
+              "sha": "${{ github.sha }}",
+            }'
