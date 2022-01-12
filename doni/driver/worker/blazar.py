@@ -29,8 +29,8 @@ _BLAZAR_ADAPTER = None
 PLACEMENT_SCHEMA = {
     "type": "object",
     "properties": {
-        "rack": args.INTEGER,
-        "node": args.INTEGER,
+        "rack": args.STRING,
+        "node": args.STRING,
     },
     "additionalProperties": False,
 }
