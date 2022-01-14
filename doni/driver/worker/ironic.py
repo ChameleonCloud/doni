@@ -220,7 +220,7 @@ class IronicWorker(BaseWorker):
 
         if isinstance(hw_capabilities, abc.Mapping) and hw_capabilities:
             capabilities_string = ",".join(
-                    [f"{key}:{value}" for key, value in hw_capabilities.items()]
+                [f"{key}:{value}" for key, value in hw_capabilities.items()]
             )
         else:
             capabilities_string = None
