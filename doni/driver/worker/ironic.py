@@ -1,5 +1,6 @@
 import re
 import time
+from collections import abc
 from functools import wraps
 from textwrap import shorten
 from typing import TYPE_CHECKING
@@ -215,13 +216,14 @@ class IronicWorker(BaseWorker):
         state_details: "dict" = None,
     ) -> "WorkerResult.Base":
         hw_props = hardware.properties
+        hw_capabilities = hw_props.get("baremetal_capabilities")
 
-        capabilities_string = ",".join(
-            [
-                f"{key}:{value}"
-                for key, value in hw_props.get("baremetal_capabilities").items()
-            ]
-        )
+        if isinstance(hw_capabilities, abc.Mapping) and hw_capabilities:
+            capabilities_string = ",".join(
+                    [f"{key}:{value}" for key, value in hw_capabilities.items()]
+            )
+        else:
+            capabilities_string = None
 
         desired_state = {
             "uuid": hardware.uuid,
