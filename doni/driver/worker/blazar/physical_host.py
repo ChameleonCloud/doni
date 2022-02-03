@@ -193,13 +193,11 @@ class BlazarPhysicalHostWorker(BaseWorker):
     opt_group = "blazar"
 
     def register_opts(self, conf):
-        """TODO What does this do?"""
-        conf.register_opts(self.opts, group=self.opt_group)
+        super().register_opts(conf)
         auth_conf.register_auth_opts(conf, self.opt_group, service_type="reservation")
 
     def list_opts(self):
-        """TODO What does this do?"""
-        return auth_conf.add_auth_opts(self.opts, service_type="reservation")
+        return auth_conf.add_auth_opts(super().list_opts(), service_type="reservation")
 
     def _blazar_host_update(
         self, context, host_id, expected_state
@@ -494,16 +492,3 @@ def _call_blazar(context, path, method="get", json=None, allowed_status_codes=[]
         return resp.json() if resp.text else None
     except Exception:
         raise BlazarAPIMalformedResponse(text=shorten(resp.text, width=50))
-
-
-class BlazarDeviceWorker(BaseWorker):
-    worker_fields = [
-        WorkerField(
-            "blazar_device_driver",
-            required=True,
-            description=(
-                "Which Blazar device driver plugin to use to make the device "
-                "reservable."
-            ),
-        )
-    ]

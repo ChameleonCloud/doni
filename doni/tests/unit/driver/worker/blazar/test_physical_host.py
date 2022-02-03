@@ -7,7 +7,7 @@ import pytest
 from keystoneauth1 import loading as ks_loading
 from oslo_utils import uuidutils
 
-from doni.driver.worker.blazar import (
+from doni.driver.worker.blazar.physical_host import (
     AW_LEASE_PREFIX,
     BlazarPhysicalHostWorker,
     _blazar_lease_request_body,
@@ -91,7 +91,7 @@ def get_mocked_blazar(mocker, request_fn):
     mock_request = mock_adapter.request
     mock_request.side_effect = request_fn
     mocker.patch(
-        "doni.driver.worker.blazar._get_blazar_adapter"
+        "doni.driver.worker.blazar.physical_host._get_blazar_adapter"
     ).return_value = mock_adapter
     return mock_request
 
@@ -272,7 +272,7 @@ def test_no_updates_to_host(
         )
         if host_response:
             return host_response
-        raise NotImplementedError(f"Unexpected request signature: {method} {path}")
+        raise NotImplementiedError(f"Unexpected request signature: {method} {path}")
 
     blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
     result = blazar_worker.process(

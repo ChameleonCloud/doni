@@ -63,8 +63,8 @@ baremetal = "doni.driver.hardware_type.baremetal:Baremetal"
 
 [tool.poetry.plugins."doni.driver.worker_type"]
 balena = "doni.driver.worker.balena:BalenaWorker"
-"blazar.physical_host" = "doni.driver.worker.blazar:BlazarPhysicalHostWorker"
-"blazar.device" = "doni.driver.worker.blazar:BlazarDeviceWorker"
+"blazar.physical_host" = "doni.driver.worker.blazar.physical_host:BlazarPhysicalHostWorker"
+"blazar.device" = "doni.driver.worker.blazar.device:BlazarDeviceWorker"
 fake-worker = "doni.driver.worker.fake:FakeWorker"
 ironic = "doni.driver.worker.ironic:IronicWorker"
 tunelo = "doni.driver.worker.tunelo:TuneloWorker"
