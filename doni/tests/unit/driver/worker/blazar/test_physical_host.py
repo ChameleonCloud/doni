@@ -7,20 +7,17 @@ import pytest
 from keystoneauth1 import loading as ks_loading
 from oslo_utils import uuidutils
 
-from doni.driver.worker.blazar.physical_host import (
-    AW_LEASE_PREFIX,
-    BlazarPhysicalHostWorker,
-    _blazar_lease_request_body,
-)
+from doni.driver.worker.blazar import AW_LEASE_PREFIX
+from doni.driver.worker.blazar.physical_host import BlazarPhysicalHostWorker
 from doni.objects.availability_window import AvailabilityWindow
 from doni.objects.hardware import Hardware
 from doni.tests.unit import utils
 from doni.worker import WorkerResult
 
 TEST_STATE_DETAILS = {
-    "blazar_host_id": "1",
+    "blazar_resource_id": "1",
 }
-TEST_BLAZAR_HOST_ID = "1"
+TEST_BLAZAR_RESOURCE_ID = "1"
 TEST_HARDWARE_UUID = uuidutils.generate_uuid()
 
 if TYPE_CHECKING:
@@ -28,7 +25,7 @@ if TYPE_CHECKING:
 
 
 def _fake_lease(aw_obj):
-    lease = _blazar_lease_request_body(aw_obj)
+    lease = BlazarPhysicalHostWorker.to_lease(aw_obj)
     lease["id"] = uuidutils.generate_uuid()
     return lease
 
@@ -100,18 +97,18 @@ def _get_hosts_response(hw_list) -> dict:
     response_dict = {"hosts": []}
     for hw in hw_list or []:
         hw_dict = {"hypervisor_hostname": hw.uuid, "node_name": hw.name}
-        hw_dict["id"] = TEST_BLAZAR_HOST_ID
+        hw_dict["id"] = TEST_BLAZAR_RESOURCE_ID
         response_dict["hosts"].append(hw_dict)
     return response_dict
 
 
 def _stub_blazar_host_new(path, method, json):
     """Blazar stub for case where host where matching UUID does not exist."""
-    if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+    if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_RESOURCE_ID}":
         return utils.MockResponse(404)
     elif method == "get" and path == f"/os-hosts":
         return utils.MockResponse(200, {"hosts": []})
-    elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+    elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_RESOURCE_ID}":
         return utils.MockResponse(404)
     elif method == "post" and path == f"/os-hosts":
         # assume that creation succeeds, return created time
@@ -125,18 +122,18 @@ def _stub_blazar_host_new(path, method, json):
 
 def _stub_blazar_host_exist(path, method, json, hw_list=None, host_details={}):
     """Blazar stub for case where host where matching UUID exists."""
-    if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+    if method == "get" and path == f"/os-hosts/{TEST_BLAZAR_RESOURCE_ID}":
         return utils.MockResponse(200, {"host": host_details})
     elif method == "get" and path == f"/os-hosts":
         return utils.MockResponse(200, _get_hosts_response(hw_list))
-    elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_HOST_ID}":
+    elif method == "put" and path == f"/os-hosts/{TEST_BLAZAR_RESOURCE_ID}":
         assert json["node_name"] == "fake_name_1"
         return utils.MockResponse(
             200,
             {
                 "host": {
                     "updated_at": "fake-updated_at",
-                    "id": TEST_BLAZAR_HOST_ID,
+                    "id": TEST_BLAZAR_RESOURCE_ID,
                     "hypervisor_hostname": TEST_HARDWARE_UUID,
                 },
             },
@@ -156,7 +153,7 @@ def _stub_blazar_host_exist(path, method, json, hw_list=None, host_details={}):
 
 
 @pytest.mark.parametrize(
-    "state_details,result_type,host_created_at",
+    "state_details,result_type,resource_created_at",
     [
         ({}, WorkerResult.Success, "fake-created_at"),
         (TEST_STATE_DETAILS, WorkerResult.Defer, None),
@@ -169,7 +166,7 @@ def test_new_physical_host(
     database: "utils.DBFixtures",
     state_details: "dict",
     result_type: "type",
-    host_created_at: "str",
+    resource_created_at: "str",
 ):
     """Test creation of a new physical host in blazar.
 
@@ -195,14 +192,14 @@ def test_new_physical_host(
     )
 
     assert isinstance(result, result_type)
-    assert result.payload.get("host_created_at") == host_created_at
+    assert result.payload.get("resource_created_at") == resource_created_at
 
 
 @pytest.mark.parametrize(
-    "state_details,result_type,blazar_host_id,call_count",
+    "state_details,result_type,blazar_resource_id,call_count",
     [
-        ({}, WorkerResult.Defer, TEST_BLAZAR_HOST_ID, 2),
-        (TEST_STATE_DETAILS, WorkerResult.Success, TEST_BLAZAR_HOST_ID, 3),
+        ({}, WorkerResult.Defer, TEST_BLAZAR_RESOURCE_ID, 2),
+        (TEST_STATE_DETAILS, WorkerResult.Success, TEST_BLAZAR_RESOURCE_ID, 3),
     ],
 )
 def test_existing_physical_host(
@@ -212,7 +209,7 @@ def test_existing_physical_host(
     database: "utils.DBFixtures",
     state_details: "dict",
     result_type: "type",
-    blazar_host_id: "str",
+    blazar_resource_id: "str",
     call_count: "int",
 ):
     """Test creation of a duplicate physical host in blazar.
@@ -245,7 +242,7 @@ def test_existing_physical_host(
     )
 
     assert isinstance(result, result_type)
-    assert result.payload.get("blazar_host_id") == blazar_host_id
+    assert result.payload.get("blazar_resource_id") == blazar_resource_id
     assert blazar_request.call_count == call_count
 
 
