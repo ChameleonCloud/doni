@@ -3,9 +3,15 @@ from doni.driver.hardware_type.base import BaseHardwareType
 from doni.worker import WorkerField
 
 
-# Currently these correspond to BalenaOS device types, b/c that's a nice taxonomy.
+# Full list of names:
 # https://www.balena.io/docs/reference/base-images/devicetypes/
-SUPPORTED_DEVICE_TYPES = ["jetson-nano", "raspberrypi3-64", "raspberrypi4-64"]
+SUPPORTED_MACHINE_NAMES = ["jetson-nano", "raspberrypi3-64", "raspberrypi4-64"]
+DEVICE_NAME_MAP = {
+    "jetson-nano": "Nvidia Jetson Nano SD-CARD",
+    "raspberrypi3-64": "Raspberry Pi 3 (using 64bit OS)",
+    "raspberrypi4-64": "Raspberry Pi 4 (using 64bit OS)",
+}
+
 SUPPORTED_CHANNEL_TYPES = ["wireguard"]
 
 CHANNEL_SCHEMA = {
@@ -29,8 +35,8 @@ CHANNELS_SCHEMA = {
 
 COMMON_FIELDS = [
     WorkerField(
-        "device_type",
-        schema=args.enum(SUPPORTED_DEVICE_TYPES),
+        "machine_name",
+        schema=args.enum(SUPPORTED_MACHINE_NAMES),
         required=True,
         description=(
             "The type of device -- this must be an explicitly supported device type"
@@ -50,7 +56,6 @@ COMMON_FIELDS = [
     WorkerField(
         "channels",
         schema=CHANNELS_SCHEMA,
-        required=True,
         private=True,
         description=(
             "A set of communications channels this device will use. All devices "

@@ -54,9 +54,6 @@ class BaseBlazarWorker(BaseWorker):
     opts = []
     opt_group = "blazar"
 
-    # Which column in the Blazar resource table will hold the Hardware UUID
-    foreign_key_column = "id"
-
     def register_opts(self, conf):
         super().register_opts(conf)
         auth_conf.register_auth_opts(conf, self.opt_group, service_type="reservation")
@@ -356,11 +353,7 @@ class BaseBlazarWorker(BaseWorker):
         )
         host_list = host_list_response.get(f"{self.resource_type}s")
         matching_host = next(
-            (
-                host
-                for host in host_list
-                if host.get(self.foreign_key_column) == hw_uuid
-            ),
+            (host for host in host_list if host.get("uid") == hw_uuid),
             None,
         )
         return matching_host
