@@ -6,10 +6,11 @@ class BlazarDeviceWorker(BaseWorker):
     worker_fields = [
         WorkerField(
             "blazar_device_driver",
+            default="k8s",
             required=True,
             description=(
                 "Which Blazar device driver plugin to use to make the device "
-                "reservable."
+                "reservable. Defaults to k8s."
             ),
         )
     ]

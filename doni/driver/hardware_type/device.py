@@ -62,14 +62,11 @@ COMMON_FIELDS = [
 ]
 
 
-class BalenaK8sDevice(BaseHardwareType):
+class BalenaDevice(BaseHardwareType):
     enabled_workers = (
         "balena",
         "blazar.device",
-        "k8s",
         "tunelo",
     )
 
     default_fields = COMMON_FIELDS
-
-    worker_overrides = {"blazar_device_driver": "k8s"}

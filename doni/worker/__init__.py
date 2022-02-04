@@ -53,65 +53,6 @@ class WorkerResult:
         """Indicates that the worker completed successfully."""
 
 
-class BaseWorker(abc.ABC):
-    """A base interface implementing common functions for Driver Interfaces.
-
-    Attributes:
-        worker_type (str): The name of the worker type.
-        fields (list[WorkerField]): A list of fields supported and/or required
-            by the worker.
-    """
-
-    worker_type = "base"
-    fields: "list[WorkerField]" = []
-    opts: "list[Opt]" = []
-    opt_group: str = ""
-
-    @abc.abstractmethod
-    def process(
-        self,
-        context: "RequestContext",
-        hardware: "Hardware",
-        availability_windows: "list[AvailabilityWindow]" = None,
-        state_details: "dict" = None,
-    ) -> "WorkerResult.Base":
-        pass
-
-    def register_opts(self, conf):
-        conf.register_opts(self.opts)
-
-    def list_opts(self):
-        return self.opts
-
-    def json_schema(self):
-        """Get the JSON schema for validating hardware properties for this worker.
-
-        Returns:
-            The JSON schema that validates that all worker fields are present
-                and valid.
-        """
-        return {
-            "type": "object",
-            "properties": {field.name: field.schema or {} for field in self.fields},
-            "required": [field.name for field in self.fields if field.required],
-        }
-
-    def import_existing(self, context: "RequestContext"):
-        """Get all known external state managed by this worker.
-
-        This is an optional capability of a worker and supports an 'import' flow
-        where existing resources/state outside of the doni can be brought under
-        doni's management.
-
-        The expected return type is a list of objects with a "uuid" and a
-        "properties" key, representing the UUID of the hardware the state
-        corresponds to (or None if one could not be reasonably determined and
-        should be auto-assigned) and a set of properties that should be imported
-        for that hardware item.
-        """
-        pass
-
-
 class WorkerField(object):
     """A Hardware field supported by a worker.
 

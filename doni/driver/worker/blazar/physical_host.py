@@ -1,16 +1,21 @@
 """Sync worker to update Blazar from Doni."""
 from datetime import datetime
-from textwrap import shorten
+
 from typing import TYPE_CHECKING
 
 from dateutil.parser import parse
-from keystoneauth1 import exceptions as kaexception
 from oslo_log import log
 from pytz import UTC
 
-from doni.common import args, exception, keystone
+from doni.common import args, exception
 from doni.conf import auth as auth_conf
 from doni.driver.worker.base import BaseWorker
+from doni.driver.worker.blazar import (
+    call_blazar,
+    BlazarAPIError,
+    BlazarIsWrongError,
+    BLAZAR_DATE_FORMAT,
+)
 from doni.objects.availability_window import AvailabilityWindow
 from doni.worker import WorkerField, WorkerResult
 
@@ -20,11 +25,6 @@ if TYPE_CHECKING:
 
 
 LOG = log.getLogger(__name__)
-
-BLAZAR_API_VERSION = "1"
-BLAZAR_API_MICROVERSION = "1.0"
-BLAZAR_DATE_FORMAT = "%Y-%m-%d %H:%M"
-_BLAZAR_ADAPTER = None
 
 PLACEMENT_SCHEMA = {
     "type": "object",
@@ -36,45 +36,6 @@ PLACEMENT_SCHEMA = {
 }
 
 AW_LEASE_PREFIX = "availability_window_"
-
-
-def _get_blazar_adapter():
-    global _BLAZAR_ADAPTER
-    if not _BLAZAR_ADAPTER:
-        _BLAZAR_ADAPTER = keystone.get_adapter(
-            "blazar",
-            session=keystone.get_session("blazar"),
-            auth=keystone.get_auth("blazar"),
-            version=BLAZAR_API_VERSION,
-        )
-    return _BLAZAR_ADAPTER
-
-
-class BlazarUnavailable(exception.DoniException):
-    """Exception for when the Blazar service cannot be contacted."""
-
-    _msg_fmt = (
-        "Could not contact Blazar API. Please check the service "
-        "configuration. The precise error was: %(message)s"
-    )
-
-
-class BlazarIsWrongError(exception.DoniException):
-    """Exception for when the Blazar service is in a bad state of some kind."""
-
-    _msg_fmt = "Blazar is in a bad state. " "The precise error was: %(message)s"
-
-
-class BlazarAPIError(exception.DoniException):
-    """Exception for an otherwise unhandled error passed from Blazar's API."""
-
-    _msg_fmt = "Blazar responded with HTTP %(code)s: %(text)s"
-
-
-class BlazarAPIMalformedResponse(exception.DoniException):
-    """Exception for malformed response from Blazar's API."""
-
-    _msg_fmt = "Blazar response malformed: %(text)s"
 
 
 class BlazarNodeProvisionStateTimeout(exception.DoniException):
@@ -141,7 +102,7 @@ def _search_hosts_for_uuid(context: "RequestContext", hw_uuid: "str") -> dict:
     Returns a dict with the matching host's properties, including blazar_host_id.
     Returns None if not found.
     """
-    host_list_response = _call_blazar(
+    host_list_response = call_blazar(
         context,
         f"/os-hosts",
         method="get",
@@ -205,7 +166,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
         """Attempt to update existing host in blazar."""
         result = {}
         try:
-            existing_state = _call_blazar(context, f"/os-hosts/{host_id}").get("host")
+            existing_state = call_blazar(context, f"/os-hosts/{host_id}").get("host")
             # Do not make any changes if not needed
             if not any(
                 existing_state.get(k) != expected_state[k]
@@ -213,7 +174,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
             ):
                 return WorkerResult.Success()
 
-            expected_state = _call_blazar(
+            expected_state = call_blazar(
                 context,
                 f"/os-hosts/{host_id}",
                 method="put",
@@ -244,7 +205,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
         try:
             body = expected_state.copy()
             body["name"] = host_name
-            host = _call_blazar(
+            host = call_blazar(
                 context,
                 f"/os-hosts",
                 method="post",
@@ -279,7 +240,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
     def _blazar_lease_list(self, context: "RequestContext", hardware: "Hardware"):
         """Get list of all leases from blazar. Return dict of blazar response."""
         # List of all leases from blazar.
-        lease_list_response = _call_blazar(
+        lease_list_response = call_blazar(
             context,
             "/leases",
             method="get",
@@ -302,7 +263,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
         """Update blazar lease if necessary. Return result dict."""
         result = {}
         try:
-            response = _call_blazar(
+            response = call_blazar(
                 context,
                 f"/leases/{lease_id}",
                 method="put",
@@ -324,7 +285,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
         """Create blazar lease. Return result dict."""
         result = {}
         try:
-            lease = _call_blazar(
+            lease = call_blazar(
                 context,
                 f"/leases",
                 method="post",
@@ -344,7 +305,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
         self, context: "RequestContext", lease_id: "str"
     ) -> WorkerResult.Base:
         """Delete Blazar lease."""
-        _call_blazar(
+        call_blazar(
             context,
             f"/leases/{lease_id}",
             method="delete",
@@ -452,7 +413,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
 
     def import_existing(self, context: "RequestContext"):
         existing_hosts = []
-        for host in _call_blazar(context, "/os-hosts")["hosts"]:
+        for host in call_blazar(context, "/os-hosts")["hosts"]:
             existing_hosts.append(
                 {
                     "uuid": host["hypervisor_hostname"],
@@ -468,27 +429,3 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 }
             )
         return existing_hosts
-
-
-def _call_blazar(context, path, method="get", json=None, allowed_status_codes=[]):
-    try:
-        blazar = _get_blazar_adapter()
-        resp = blazar.request(
-            path,
-            method=method,
-            json=json,
-            microversion=BLAZAR_API_MICROVERSION,
-            global_request_id=context.global_id,
-            raise_exc=False,
-        )
-    except kaexception.ClientException as exc:
-        raise BlazarUnavailable(message=str(exc))
-
-    if resp.status_code >= 400 and resp.status_code not in allowed_status_codes:
-        raise BlazarAPIError(code=resp.status_code, text=shorten(resp.text, width=50))
-
-    try:
-        # Treat empty response bodies as None
-        return resp.json() if resp.text else None
-    except Exception:
-        raise BlazarAPIMalformedResponse(text=shorten(resp.text, width=50))

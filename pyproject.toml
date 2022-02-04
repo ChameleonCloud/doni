@@ -59,7 +59,7 @@ sqlalchemy = "doni.db.migration"
 [tool.poetry.plugins."doni.driver.hardware_type"]
 fake-hardware = "doni.driver.hardware_type.fake:Fake"
 baremetal = "doni.driver.hardware_type.baremetal:Baremetal"
-"device.balena_k8s" = "doni.driver.hardware_type.device:BalenaK8sDevice"
+"device.balena" = "doni.driver.hardware_type.device:BalenaDevice"
 
 [tool.poetry.plugins."doni.driver.worker_type"]
 balena = "doni.driver.worker.balena:BalenaWorker"

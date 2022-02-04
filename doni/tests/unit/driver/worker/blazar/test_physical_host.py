@@ -91,7 +91,7 @@ def get_mocked_blazar(mocker, request_fn):
     mock_request = mock_adapter.request
     mock_request.side_effect = request_fn
     mocker.patch(
-        "doni.driver.worker.blazar.physical_host._get_blazar_adapter"
+        "doni.driver.worker.blazar._get_blazar_adapter"
     ).return_value = mock_adapter
     return mock_request
 

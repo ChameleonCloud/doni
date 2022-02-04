@@ -27,7 +27,7 @@ def tunelo_worker(test_config):
     """
     # Configure the app to use a hardware type valid for this worker.
     test_config.config(
-        enabled_hardware_types=["device.balena_k8s"],
+        enabled_hardware_types=["device.balena"],
         enabled_worker_types=["tunelo"],
     )
 
@@ -60,7 +60,7 @@ def get_fake_hardware(database: "utils.DBFixtures"):
     """Add a dummy hw device to the DB for testing."""
     db_hw = database.add_hardware(
         uuid=TEST_HARDWARE_UUID,
-        hardware_type="device.balena_k8s",
+        hardware_type="device.balena",
         properties={
             "channels": {
                 "user": {"channel_type": "wireguard", "public_key": "fake-public_key"}
