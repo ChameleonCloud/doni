@@ -2,15 +2,14 @@ import re
 import time
 from collections import abc
 from functools import wraps
-from textwrap import shorten
 from typing import TYPE_CHECKING
 
 import jsonpatch
-from keystoneauth1 import exceptions as kaexception
 from oslo_log import log
 
 from doni.common import args, exception, keystone
 from doni.conf import auth as auth_conf
+from doni.driver.util import KeystoneServiceAPIError, ks_service_requestor
 from doni.driver.worker.base import BaseWorker
 from doni.worker import WorkerField, WorkerResult
 
@@ -71,27 +70,12 @@ def _defer_on_node_locked(fn):
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
-        except IronicAPIError as exc:
+        except KeystoneServiceAPIError as exc:
             if exc.code == 409:
                 return WorkerResult.Defer(reason="Node is locked.")
             raise
 
     return wrapper
-
-
-class IronicUnavailable(exception.DoniException):
-    _msg_fmt = (
-        "Could not contact Ironic API. Please check the service "
-        "configuration. The precise error was: %(message)s"
-    )
-
-
-class IronicAPIError(exception.DoniException):
-    _msg_fmt = "Ironic responded with HTTP %(code)s: %(text)s"
-
-
-class IronicAPIMalformedResponse(exception.DoniException):
-    _msg_fmt = "Ironic response malformed: %(text)s"
 
 
 class IronicNodeProvisionStateTimeout(exception.DoniException):
@@ -248,7 +232,7 @@ class IronicWorker(BaseWorker):
         desired_interfaces = hw_props.get("interfaces", [])
 
         existing = _call_ironic(
-            context, f"/nodes/{hardware.uuid}", method="get", none_on_404=True
+            context, f"/nodes/{hardware.uuid}", method="get", allowed_status_codes=[404]
         )
 
         if not existing:
@@ -472,31 +456,5 @@ def _wait_for_provision_state(
         provision_state = node["provision_state"]
 
 
-def _call_ironic(context, path, method="get", json=None, none_on_404=False):
-    try:
-        ironic = _get_ironic_adapter()
-        resp = ironic.request(
-            path,
-            method=method,
-            json=json,
-            microversion=IRONIC_API_MICROVERSION,
-            global_request_id=context.global_id,
-            raise_exc=False,
-        )
-    except kaexception.ClientException as exc:
-        raise IronicUnavailable(message=str(exc))
-
-    if resp.status_code >= 400:
-        if resp.status_code == 404 and none_on_404:
-            return None
-        try:
-            error_message = resp.json()["error_message"]
-        except Exception:
-            error_message = shorten(resp.text, width=50)
-        raise IronicAPIError(code=resp.status_code, text=error_message)
-
-    try:
-        # Treat empty response bodies as None
-        return resp.json() if resp.text else None
-    except Exception:
-        raise IronicAPIMalformedResponse(text=shorten(resp.text, width=50))
+def _call_ironic(*args, **kwargs):
+    return ks_service_requestor("Ironic", _get_ironic_adapter)(*args, **kwargs)
