@@ -20,7 +20,7 @@ from keystoneauth1 import exceptions as ks_exception
 from keystoneauth1 import loading as ks_loading
 from keystoneauth1 import service_token
 from keystoneauth1 import token_endpoint
-from oslo_log import log as logging
+from oslo_log import log
 
 from doni.common import exception
 from doni.conf import CONF
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from keystoneauth1.session import Session
 
 
-LOG = logging.getLogger(__name__)
+LOG = log.getLogger(__name__)
 
 
 def ks_exceptions(f):

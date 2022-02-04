@@ -2,6 +2,8 @@ import json
 import logging
 import typing
 
+from oslo_log import log
+
 from doni.common import keystone
 from doni.conf import auth as auth_conf
 from doni.driver.util import ks_service_requestor
@@ -13,7 +15,7 @@ if typing.TYPE_CHECKING:
     from doni.objects.availability_window import AvailabilityWindow
     from doni.objects.hardware import Hardware
 
-LOG = logging.getLogger(__name__)
+LOG = log.getLogger(__name__)
 
 _TUNELO_ADAPTER = None
 
