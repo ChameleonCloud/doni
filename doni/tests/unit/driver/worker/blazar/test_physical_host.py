@@ -272,7 +272,7 @@ def test_no_updates_to_host(
         )
         if host_response:
             return host_response
-        raise NotImplementiedError(f"Unexpected request signature: {method} {path}")
+        raise NotImplementedError(f"Unexpected request signature: {method} {path}")
 
     blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
     result = blazar_worker.process(

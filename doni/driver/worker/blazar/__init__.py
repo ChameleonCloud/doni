@@ -3,6 +3,7 @@ from textwrap import shorten
 from keystoneauth1 import exceptions as kaexception
 
 from doni.common import exception, keystone
+from doni.driver.util import ks_service_requestor
 
 BLAZAR_API_VERSION = "1"
 BLAZAR_API_MICROVERSION = "1.0"
@@ -49,25 +50,5 @@ def _get_blazar_adapter():
     return _BLAZAR_ADAPTER
 
 
-def call_blazar(context, path, method="get", json=None, allowed_status_codes=[]):
-    try:
-        blazar = _get_blazar_adapter()
-        resp = blazar.request(
-            path,
-            method=method,
-            json=json,
-            microversion=BLAZAR_API_MICROVERSION,
-            global_request_id=context.global_id,
-            raise_exc=False,
-        )
-    except kaexception.ClientException as exc:
-        raise BlazarUnavailable(message=str(exc))
-
-    if resp.status_code >= 400 and resp.status_code not in allowed_status_codes:
-        raise BlazarAPIError(code=resp.status_code, text=shorten(resp.text, width=50))
-
-    try:
-        # Treat empty response bodies as None
-        return resp.json() if resp.text else None
-    except Exception:
-        raise BlazarAPIMalformedResponse(text=shorten(resp.text, width=50))
+def call_blazar(*args, **kwargs):
+    return ks_service_requestor("Blazar", _get_blazar_adapter)(*args, **kwargs)

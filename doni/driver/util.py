@@ -41,8 +41,8 @@ def ks_service_requestor(
 ) -> "Callable[[RequestContext, str, str, dict, list[int]], Union[Optional[dict],Optional[list]]]":
     def _request(context, path, method="get", json=None, allowed_status_codes=[]):
         try:
-            blazar = client_factory()
-            resp: "Response" = blazar.request(
+            client = client_factory()
+            resp: "Response" = client.request(
                 path,
                 method=method,
                 json=json,

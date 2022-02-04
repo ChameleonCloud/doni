@@ -9,10 +9,10 @@ from pytz import UTC
 
 from doni.common import args, exception
 from doni.conf import auth as auth_conf
+from doni.driver.util import KeystoneServiceAPIError
 from doni.driver.worker.base import BaseWorker
 from doni.driver.worker.blazar import (
     call_blazar,
-    BlazarAPIError,
     BlazarIsWrongError,
     BLAZAR_DATE_FORMAT,
 )
@@ -180,7 +180,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 method="put",
                 json=expected_state,
             ).get("host")
-        except BlazarAPIError as exc:
+        except KeystoneServiceAPIError as exc:
             # TODO what error code does blazar return if the host has a lease already?
             if exc.code == 404:
                 # remove invalid stored host_id and retry after defer
@@ -211,7 +211,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 method="post",
                 json=body,
             ).get("host")
-        except BlazarAPIError as exc:
+        except KeystoneServiceAPIError as exc:
             if exc.code == 404:
                 # host isn't in ironic.
                 result["message"] = "Host does not exist in Ironic yet"
@@ -269,7 +269,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 method="put",
                 json=new_lease,
             ).get("lease")
-        except BlazarAPIError as exc:
+        except KeystoneServiceAPIError as exc:
             if exc.code == 404:
                 return WorkerResult.Defer(reason="Host not found")
             elif exc.code == 409:
@@ -291,7 +291,7 @@ class BlazarPhysicalHostWorker(BaseWorker):
                 method="post",
                 json=new_lease,
             ).get("lease")
-        except BlazarAPIError as exc:
+        except KeystoneServiceAPIError as exc:
             if exc.code == 404:
                 return WorkerResult.Defer(reason="Host not found")
             elif exc.code == 409:
