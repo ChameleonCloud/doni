@@ -27,7 +27,7 @@ osprofiler = "^2.8.2"
 "oslo.versionedobjects" = "^1.36.1"
 alembic = "^1.1.0"
 "oslo.middleware" = "^3.38.1"
-keystonemiddleware = "^7.0.1"
+keystonemiddleware = "^9.3.0"
 "oslo.policy" = "^2.3.4"
 jsonschema = { version = "^3.0.2", extras = ["format"] }
 jsonpatch = "^1.24"
