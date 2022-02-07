@@ -232,7 +232,7 @@ class IronicWorker(BaseWorker):
         desired_interfaces = hw_props.get("interfaces", [])
 
         existing = _call_ironic(
-            context, f"/nodes/{hardware.uuid}", method="get", allowed_status_codes=[404]
+            context, f"/nodes/{hardware.uuid}", method="get", allowed_error_codes=[404]
         )
 
         if not existing:

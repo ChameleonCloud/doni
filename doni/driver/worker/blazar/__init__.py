@@ -74,7 +74,6 @@ class BaseBlazarWorker(BaseWorker):
 
     @classmethod
     def to_reservation_values(cls, hardware_uuid: str) -> dict:
-        """Given an AvailabilityWindow, """
         raise NotImplementedError()
 
     @classmethod
@@ -197,8 +196,10 @@ class BaseBlazarWorker(BaseWorker):
             ).get(self.resource_type)
         except KeystoneServiceAPIError as exc:
             if exc.code == 404:
-                # host isn't in ironic.
-                result["message"] = "Host does not exist in Ironic yet"
+                result["message"] = (
+                    "Can not make resource reservable, as the underlying entity "
+                    "could not be found."
+                )
                 return WorkerResult.Defer(result)
             elif exc.code == 409:
                 resource = self._find_resource(context, uuid)

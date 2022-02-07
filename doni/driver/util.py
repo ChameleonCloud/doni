@@ -39,7 +39,7 @@ def ks_service_requestor(
     microversion=None,
     parse_error=None,
 ) -> "Callable[[RequestContext, str, str, dict, list[int]], Union[Optional[dict],Optional[list]]]":
-    def _request(context, path, method="get", json=None, allowed_status_codes=[]):
+    def _request(context, path, method="get", json=None, allowed_error_codes=[]):
         try:
             client = client_factory()
             resp: "Response" = client.request(
@@ -53,7 +53,7 @@ def ks_service_requestor(
         except kaexception.ClientException as exc:
             raise KeystoneServiceUnavailable(service=name, message=str(exc))
 
-        if resp.status_code >= 400 and resp.status_code not in allowed_status_codes:
+        if resp.status_code >= 400 and resp.status_code not in allowed_error_codes:
             if callable(parse_error):
                 error_message = parse_error(resp.text)
             else:
