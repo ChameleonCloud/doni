@@ -29,7 +29,7 @@ def upgrade():
     bind = op.get_bind()
     session = sa.orm.Session(bind=bind)
     for wt in session.query(worker_task).filter(
-        worker_task.worker_type == "blazar.physical_host"
+        worker_task.columns.worker_type == "blazar.physical_host"
     ):  # type: worker_task
         state_details = wt.state_details
         if "blazar_host_id" in state_details:
@@ -47,7 +47,7 @@ def downgrade():
     bind = op.get_bind()
     session = sa.orm.Session(bind=bind)
     for wt in session.query(worker_task).filter(
-        worker_task.worker_type == "blazar.physical_host"
+        worker_task.columns.worker_type == "blazar.physical_host"
     ):  # type: worker_task
         state_details = wt.state_details
         if "blazar_resource_id" in state_details:
