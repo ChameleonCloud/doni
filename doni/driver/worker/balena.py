@@ -129,7 +129,10 @@ class BalenaWorker(BaseWorker):
         device_id = self._to_device_id(hardware.uuid)
 
         try:
-            balena.models.device.get(device_id)
+            device = balena.models.device.get(device_id)
+            if device["name"] != hardware.name:
+                balena.models.device.rename(device["id"], hardware.name)
+                LOG.info(f"Updated device name for {hardware.uuid}")
         except DeviceNotFound:
             machine_name = hardware.properties.get("machine_name")
             fleet_name = CONF.balena.device_fleet_mapping.get(machine_name)
@@ -138,7 +141,8 @@ class BalenaWorker(BaseWorker):
                     f"No fleet is configured for machine name {machine_name}"
                 )
             fleet = balena.models.application.get(fleet_name)
-            balena.models.device.register(fleet["id"], device_id)
+            device = balena.models.device.register(fleet["id"], device_id)
+            balena.models.device.rename(device["id"], hardware.name)
             LOG.info(f"Registered new device for {hardware.uuid}")
 
     def _to_device_id(self, hardware_uuid: str):
