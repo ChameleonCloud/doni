@@ -129,11 +129,11 @@ class BalenaWorker(BaseWorker):
         try:
             balena.models.device.get(hardware.uuid)
         except DeviceNotFound:
-            device_type = hardware.properties.get("device_type")
-            fleet_name = CONF.balena.device_fleet_mapping.get(device_type)
+            machine_name = hardware.properties.get("machine_name")
+            fleet_name = CONF.balena.device_fleet_mapping.get(machine_name)
             if not fleet_name:
                 raise ValueError(
-                    f"No fleet is configured for device type {device_type}"
+                    f"No fleet is configured for machine name {machine_name}"
                 )
             fleet = balena.models.application.get(fleet_name)
             balena.models.device.register(fleet["id"], hardware.uuid)
