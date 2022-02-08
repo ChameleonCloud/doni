@@ -60,8 +60,8 @@ class TuneloWorker(BaseWorker):
 
         # Channels which exist but we have no record of
         dangling_channels = set(existing_channels.keys()) - set(channel_state.values())
-
-        for channel_name, channel_props in hardware.properties["channels"].items():
+        hw_channels = hardware.properties.get("channels", {})
+        for channel_name, channel_props in hw_channels.items():
             channel_uuid = channel_state.get(channel_name)
             # Recreate if representation differs
             if channel_uuid:
