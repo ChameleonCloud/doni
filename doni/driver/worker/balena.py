@@ -130,7 +130,7 @@ class BalenaWorker(BaseWorker):
 
         try:
             device = balena.models.device.get(device_id)
-            if device["name"] != hardware.name:
+            if device.get("name") != hardware.name:
                 balena.models.device.rename(device["id"], hardware.name)
                 LOG.info(f"Updated device name for {hardware.uuid}")
         except DeviceNotFound:
