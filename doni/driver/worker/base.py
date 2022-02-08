@@ -46,7 +46,7 @@ class BaseWorker(abc.ABC):
         pass
 
     def register_opts(self, conf: "ConfigOpts"):
-        conf.register_opts(self.opts)
+        conf.register_opts(self.opts, group=self.opt_group)
 
     def list_opts(self):
         return self.opts
