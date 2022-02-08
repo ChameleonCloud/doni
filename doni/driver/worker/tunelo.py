@@ -37,10 +37,10 @@ class TuneloWorker(BaseWorker):
 
     def register_opts(self, conf):
         conf.register_opts(self.opts, group=self.opt_group)
-        auth_conf.register_auth_opts(conf, self.opt_group, service_type="tunnel")
+        auth_conf.register_auth_opts(conf, self.opt_group, service_type="channel")
 
     def list_opts(self):
-        return auth_conf.add_auth_opts(self.opts, service_type="tunnel")
+        return auth_conf.add_auth_opts(self.opts, service_type="channel")
 
     def process(
         self,
