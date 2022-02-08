@@ -95,6 +95,7 @@ class BalenaWorker(BaseWorker):
         availability_windows: "list[AvailabilityWindow]" = None,
         state_details: "dict" = None,
     ) -> "WorkerResult.Base":
+        device_id = self._to_device_id(hardware.uuid)
         self._register_device(hardware)
         self._sync_device_var(
             hardware.uuid,
@@ -114,7 +115,7 @@ class BalenaWorker(BaseWorker):
             # will be querying Doni for this information and configuring their device
             # OS image with it.
             device_api_key = _get_balena_sdk().models.device.generate_device_key(
-                hardware.uuid
+                device_id
             )
             state_details["device_api_key"] = device_api_key
             LOG.info(f"Generated device API key for {hardware.uuid}")
@@ -125,9 +126,10 @@ class BalenaWorker(BaseWorker):
         from balena.exceptions import DeviceNotFound
 
         balena = _get_balena_sdk()
+        device_id = self._to_device_id(hardware.uuid)
 
         try:
-            balena.models.device.get(hardware.uuid)
+            balena.models.device.get(device_id)
         except DeviceNotFound:
             machine_name = hardware.properties.get("machine_name")
             fleet_name = CONF.balena.device_fleet_mapping.get(machine_name)
@@ -136,11 +138,16 @@ class BalenaWorker(BaseWorker):
                     f"No fleet is configured for machine name {machine_name}"
                 )
             fleet = balena.models.application.get(fleet_name)
-            balena.models.device.register(fleet["id"], hardware.uuid)
+            balena.models.device.register(fleet["id"], device_id)
             LOG.info(f"Registered new device for {hardware.uuid}")
+
+    def _to_device_id(self, hardware_uuid: str):
+        return hardware_uuid.replace("-", "")
 
     def _sync_device_var(self, hardware_uuid, key, value, service_name=None):
         balena = _get_balena_sdk()
+        device_id = self._to_device_id(hardware_uuid)
+
         if service_name:
             device_vars = (
                 balena.models.environment_variables.device_service_environment_variable
@@ -149,20 +156,14 @@ class BalenaWorker(BaseWorker):
             device_vars = balena.models.environment_variables.device
 
         existing = next(
-            iter(
-                [
-                    var
-                    for var in device_vars.get_all(hardware_uuid)
-                    if var["name"] == key
-                ]
-            ),
+            iter([var for var in device_vars.get_all(device_id) if var["name"] == key]),
             None,
         )
         if not existing:
             if service_name:
-                device_vars.create(hardware_uuid, service_name, key, value)
+                device_vars.create(device_id, service_name, key, value)
             else:
-                device_vars.create(hardware_uuid, key, value)
+                device_vars.create(device_id, key, value)
             LOG.info(f"Created new device env var {key} for {hardware_uuid}")
         elif existing["value"] != value:
             device_vars.update(existing["id"], value)
