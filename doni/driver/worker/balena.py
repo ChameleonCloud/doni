@@ -131,7 +131,7 @@ class BalenaWorker(BaseWorker):
         try:
             device = balena.models.device.get(device_id)
             if device["device_name"] != hardware.name:
-                balena.models.device.rename(device["id"], hardware.name)
+                balena.models.device.rename(device_id, hardware.name)
                 LOG.info(f"Updated device name for {hardware.uuid}")
         except DeviceNotFound:
             machine_name = hardware.properties.get("machine_name")
@@ -143,7 +143,7 @@ class BalenaWorker(BaseWorker):
             fleet = balena.models.application.get(fleet_name)
             device = balena.models.device.register(fleet["id"], device_id)
             # Balena will have auto-assigned a device name, change to user-specified
-            balena.models.device.rename(device["id"], hardware.name)
+            balena.models.device.rename(device_id, hardware.name)
             LOG.info(f"Registered new device for {hardware.uuid}")
 
     def _to_device_id(self, hardware_uuid: str):
