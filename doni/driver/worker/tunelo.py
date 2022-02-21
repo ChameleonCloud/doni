@@ -106,4 +106,13 @@ class TuneloWorker(BaseWorker):
         return False
 
     def _call_tunelo(self, *args, **kwargs):
-        return ks_service_requestor("Tunelo", _get_tunelo_adapter)(*args, **kwargs)
+        return ks_service_requestor(
+            "Tunelo", _get_tunelo_adapter, parse_error=_parse_tunelo_error
+        )(*args, **kwargs)
+
+
+def _parse_tunelo_error(response_body):
+    try:
+        return json.loads(response_body).get("error")
+    except json.JSONDecodeError:
+        return response_body
