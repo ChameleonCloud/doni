@@ -185,7 +185,7 @@ class WorkerManager(object):
             if isinstance(exc, exception.DoniException):
                 message = str(exc)
             else:
-                LOG.error(f"Unhandled error: {exc}")
+                LOG.exception("Unhandled error")
                 message = "Unhandled error"
             LOG.error(
                 (
