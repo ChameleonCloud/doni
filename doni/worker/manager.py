@@ -228,12 +228,12 @@ class WorkerManager(object):
 
     def _move_to_steady_state(self, task, state_details, payload=None):
         task.state = WorkerState.STEADY
+        if payload:
+            state_details.update(payload)
         # Clear intermediate state detail information
         for detail in ALL_DETAILS:
             if detail in state_details:
                 del state_details[detail]
-        if payload:
-            state_details.update(payload)
         task.state_details = state_details
 
     def _collect_periodic_tasks(self, workers, admin_context):
