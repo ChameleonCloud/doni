@@ -14,10 +14,11 @@ if typing.TYPE_CHECKING:
     from doni.common.context import RequestContext
     from doni.objects.availability_window import AvailabilityWindow
     from doni.objects.hardware import Hardware
+    from keystoneauth1.adapter import Adapter
 
 LOG = log.getLogger(__name__)
 
-_TUNELO_ADAPTER = None
+_TUNELO_ADAPTER: "Adapter" = None
 
 
 def _get_tunelo_adapter():
@@ -79,7 +80,8 @@ class TuneloWorker(BaseWorker):
                     )
 
             channel_req = {
-                "project_id": hardware.project_id,
+                # TODO: tunelo should infer this from auth headers
+                "project_id": _get_tunelo_adapter().get_project_id(),
                 "channel_type": channel_props.get("channel_type"),
                 "properties": {
                     "public_key": channel_props.get("public_key"),
