@@ -79,8 +79,7 @@ class TuneloWorker(BaseWorker):
                     )
 
             channel_req = {
-                # TODO: tunelo should just read this from headers, no need to send.
-                "project_id": context.project_id,
+                "project_id": hardware.project_id,
                 "channel_type": channel_props.get("channel_type"),
                 "properties": {
                     "public_key": channel_props.get("public_key"),
