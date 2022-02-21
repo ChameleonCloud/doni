@@ -87,7 +87,7 @@ class TuneloWorker(BaseWorker):
                 },
             }
             channel = self._call_tunelo(
-                context, "/channels", method="post", json=json.dumps(channel_req)
+                context, "/channels", method="post", json=channel_req
             )
             LOG.info(f"Created new {channel_name} channel at {channel['uuid']}")
             channel_state[channel_name] = channel["uuid"]
