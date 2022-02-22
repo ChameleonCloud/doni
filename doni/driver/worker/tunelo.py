@@ -82,7 +82,7 @@ class TuneloWorker(BaseWorker):
                 existing = existing_channels[channel_uuid]
                 if not self._differs(channel_props, existing):
                     # Nothing to do, move on, but save current channel details
-                    channel_state[channel_name] = self._to_state_details(channel)
+                    channel_state[channel_name] = self._to_state_details(existing)
                     continue
                 else:
                     # Recreate if representation differs
