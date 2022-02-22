@@ -43,6 +43,14 @@ class TuneloWorker(BaseWorker):
     def list_opts(self):
         return auth_conf.add_auth_opts(self.opts, service_type="channel")
 
+    def _to_state_details(self, channel):
+        return {
+            "uuid": channel["uuid"],
+            "peers": [peer["properties"] for peer in channel["peers"]],
+            "endpoint": channel["properties"].get("endpoint"),
+            "ip": channel["properties"].get("ip"),
+        }
+
     def process(
         self,
         context: "RequestContext",
@@ -63,14 +71,21 @@ class TuneloWorker(BaseWorker):
         dangling_channels = set(existing_channels.keys()) - set(channel_state.values())
         hw_channels = hardware.properties.get("channels", {})
         for channel_name, channel_props in hw_channels.items():
-            channel_uuid = channel_state.get(channel_name)
-            # Recreate if representation differs
-            if channel_uuid:
+            stored_channel = channel_state.get(channel_name)
+            if stored_channel:
+                # Backwards compatibility for before more properties were stored here.
+                channel_uuid = (
+                    stored_channel
+                    if isinstance(stored_channel, str)
+                    else stored_channel["uuid"]
+                )
                 existing = existing_channels[channel_uuid]
                 if not self._differs(channel_props, existing):
-                    # Nothing to do, move on
+                    # Nothing to do, move on, but save current channel details
+                    channel_state[channel_name] = self._to_state_details(channel)
                     continue
                 else:
+                    # Recreate if representation differs
                     self._call_tunelo(
                         context, f"/channels/{channel_uuid}", method="delete"
                     )
@@ -91,7 +106,7 @@ class TuneloWorker(BaseWorker):
                 context, "/channels", method="post", json=channel_req
             )
             LOG.info(f"Created new {channel_name} channel at {channel['uuid']}")
-            channel_state[channel_name] = channel["uuid"]
+            channel_state[channel_name] = self._to_state_details(channel)
 
         for channel_uuid in dangling_channels:
             self._call_tunelo(context, f"/channels/{channel_uuid}", method="delete")
