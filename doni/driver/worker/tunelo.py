@@ -80,8 +80,8 @@ class TuneloWorker(BaseWorker):
             stored_channel = channel_state.get(channel_name)
             if stored_channel:
                 channel_uuid = stored_channel["uuid"]
-                existing = existing_channels[channel_uuid]
-                if not self._differs(channel_props, existing):
+                existing = existing_channels.get(channel_uuid)
+                if existing and not self._differs(channel_props, existing):
                     # Nothing to do, move on, but save current channel details
                     channel_state[channel_name] = self._to_state_details(existing)
                     continue
