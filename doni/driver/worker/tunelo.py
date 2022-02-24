@@ -81,19 +81,20 @@ class TuneloWorker(BaseWorker):
             if stored_channel:
                 channel_uuid = stored_channel["uuid"]
                 existing = existing_channels.get(channel_uuid)
-                if existing and not self._differs(channel_props, existing):
-                    # Nothing to do, move on, but save current channel details
-                    channel_state[channel_name] = self._to_state_details(existing)
-                    continue
-                else:
-                    # Recreate if representation differs
-                    self._call_tunelo(
-                        context, f"/channels/{channel_uuid}", method="delete"
-                    )
-                    LOG.info(
-                        f"Channel {channel_name} changed, will re-create "
-                        f"{channel_uuid} with new properties"
-                    )
+                if existing:
+                    if not self._differs(channel_props, existing):
+                        # Nothing to do, move on, but save current channel details
+                        channel_state[channel_name] = self._to_state_details(existing)
+                        continue
+                    else:
+                        # Recreate if representation differs
+                        self._call_tunelo(
+                            context, f"/channels/{channel_uuid}", method="delete"
+                        )
+                        LOG.info(
+                            f"Channel {channel_name} changed, will re-create "
+                            f"{channel_uuid} with new properties"
+                        )
 
             channel_req = {
                 # TODO: tunelo should infer this from auth headers
