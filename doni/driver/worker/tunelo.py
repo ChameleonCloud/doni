@@ -59,7 +59,11 @@ class TuneloWorker(BaseWorker):
         state_details: "dict" = None,
     ) -> "WorkerResult.Base":
         # Mapping of channel names to channel UUIDs
-        channel_state = state_details.setdefault("channels", {})
+        channel_state: dict = state_details.setdefault("channels", {})
+        # Backwards compatibility for before more properties were stored here.
+        for channel_name in channel_state.keys():
+            if isinstance(channel_state[channel_name], str):
+                channel_state[channel_name] = {"uuid": channel_state[channel_name]}
 
         # Mapping of channel UUIDs to their existing representations
         existing_channels = {
@@ -73,12 +77,7 @@ class TuneloWorker(BaseWorker):
         for channel_name, channel_props in hw_channels.items():
             stored_channel = channel_state.get(channel_name)
             if stored_channel:
-                # Backwards compatibility for before more properties were stored here.
-                channel_uuid = (
-                    stored_channel
-                    if isinstance(stored_channel, str)
-                    else stored_channel["uuid"]
-                )
+                channel_uuid = stored_channel["uuid"]
                 existing = existing_channels[channel_uuid]
                 if not self._differs(channel_props, existing):
                     # Nothing to do, move on, but save current channel details
