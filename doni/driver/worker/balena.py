@@ -96,7 +96,9 @@ class BalenaWorker(BaseWorker):
         state_details: "dict" = None,
     ) -> "WorkerResult.Base":
         device_id = self._to_device_id(hardware.uuid)
-        self._register_device(hardware)
+        # Balena gives the device a UUID but also maintains an internal ID, which is
+        # useful to track for some operations
+        balena_device_id = self._register_device(hardware)
         self._sync_device_var(
             hardware.uuid,
             "OS_APPLICATION_CREDENTIAL_ID",
@@ -119,6 +121,8 @@ class BalenaWorker(BaseWorker):
             )
             state_details["device_api_key"] = device_api_key
             LOG.info(f"Generated device API key for {hardware.uuid}")
+
+        state_details["device_id"] = balena_device_id
 
         return WorkerResult.Success(state_details)
 
@@ -145,6 +149,8 @@ class BalenaWorker(BaseWorker):
             # Balena will have auto-assigned a device name, change to user-specified
             balena.models.device.rename(device_id, hardware.name)
             LOG.info(f"Registered new device for {hardware.uuid}")
+
+        return device["id"]
 
     def _to_device_id(self, hardware_uuid: str):
         return hardware_uuid.replace("-", "")
