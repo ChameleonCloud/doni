@@ -123,9 +123,7 @@ class BalenaWorker(BaseWorker):
         # Balena gives the device a UUID but also maintains an internal ID, which is
         # useful to track for some operations
         state_details["device_id"] = balena_device["id"]
-        state_details["fleet_id"] = balena_device.get(
-            "fleet_id", balena_device["application_id"]
-        )
+        state_details["fleet_id"] = balena_device["belongs_to__application"].get("__id")
 
         return WorkerResult.Success(state_details)
 
