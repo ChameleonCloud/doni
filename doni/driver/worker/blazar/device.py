@@ -27,6 +27,13 @@ class BlazarDeviceWorker(BaseBlazarWorker):
     ]
 
     @classmethod
+    def to_resource_name(cls, hardware: "Hardware") -> str:
+        # Devices are registered by name b/c Blazar will look up the kubelet in k8s
+        # at resource create time, and kubelets are named after their hostname, which
+        # is in turn set by the hardware name.
+        return hardware.name
+
+    @classmethod
     def expected_state(cls, hardware: "Hardware") -> dict:
         hw_props = hardware.properties
         device_dict = {
