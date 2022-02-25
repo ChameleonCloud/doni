@@ -96,9 +96,7 @@ class BalenaWorker(BaseWorker):
         state_details: "dict" = None,
     ) -> "WorkerResult.Base":
         device_id = self._to_device_id(hardware.uuid)
-        # Balena gives the device a UUID but also maintains an internal ID, which is
-        # useful to track for some operations
-        balena_device_id = self._register_device(hardware)
+        balena_device = self._register_device(hardware)
         self._sync_device_var(
             hardware.uuid,
             "OS_APPLICATION_CREDENTIAL_ID",
@@ -112,17 +110,22 @@ class BalenaWorker(BaseWorker):
             service_name=CONF.balena.credential_service_name,
         )
 
+        balena = _get_balena_sdk()
+
         if "device_api_key" not in state_details:
             # Generate a device key and store on the state; the device owner (user)
             # will be querying Doni for this information and configuring their device
             # OS image with it.
-            device_api_key = _get_balena_sdk().models.device.generate_device_key(
-                device_id
-            )
+            device_api_key = balena.models.device.generate_device_key(device_id)
             state_details["device_api_key"] = device_api_key
             LOG.info(f"Generated device API key for {hardware.uuid}")
 
-        state_details["device_id"] = balena_device_id
+        # Balena gives the device a UUID but also maintains an internal ID, which is
+        # useful to track for some operations
+        state_details["device_id"] = balena_device["id"]
+        state_details["fleet_id"] = balena_device.get(
+            "fleet_id", balena_device["application_id"]
+        )
 
         return WorkerResult.Success(state_details)
 
@@ -150,7 +153,7 @@ class BalenaWorker(BaseWorker):
             balena.models.device.rename(device_id, hardware.name)
             LOG.info(f"Registered new device for {hardware.uuid}")
 
-        return device["id"]
+        return device
 
     def _to_device_id(self, hardware_uuid: str):
         return hardware_uuid.replace("-", "")
