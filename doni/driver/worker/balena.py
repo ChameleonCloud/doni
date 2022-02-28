@@ -126,7 +126,10 @@ class BalenaWorker(BaseWorker):
         state_details["device_id"] = balena_device["id"]
         state_details["fleet_id"] = balena_device["belongs_to__application"].get("__id")
         state_details["last_seen"] = (
-            datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            datetime.now(tz=timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
             if balena_device["is_online"]
             else balena_device["last_connectivity_event"]
         )
