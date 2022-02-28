@@ -124,6 +124,7 @@ class BalenaWorker(BaseWorker):
         # useful to track for some operations
         state_details["device_id"] = balena_device["id"]
         state_details["fleet_id"] = balena_device["belongs_to__application"].get("__id")
+        state_details["last_seen"] = balena_device["last_connectivity_event"]
 
         return WorkerResult.Success(state_details)
 
