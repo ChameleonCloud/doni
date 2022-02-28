@@ -179,10 +179,34 @@ def hardware_serializer(with_private_fields=False):
 @route("/", methods=["GET"], blueprint=bp)
 def get_all():
     ctx = request.context
-    authorize("hardware:get", ctx)
+    project_id = None if request.args.get("all_projects") else ctx.project_id
+    limit = request.args.get("limit")
+    marker = request.args.get("marker")
+    sort_key = request.args.get("sort_key")
+    sort_dir = request.args.get("sort_dir")
+
+    authorize("hardware:get", ctx, {"project_id": project_id})
     serialize = hardware_serializer(with_private_fields=True)
+    hardwares = Hardware.list(
+        ctx,
+        limit=limit,
+        marker=marker,
+        sort_key=sort_key,
+        sort_dir=sort_dir,
+        project_id=project_id,
+    )
+    links = []
+    if hardwares and len(hardwares) == limit:
+        links.append(
+            {
+                "href": api_utils.get_next_href(request, marker=hardwares[-1].uuid),
+                "rel": "next",
+            }
+        )
+
     return {
-        "hardware": [serialize(hw) for hw in Hardware.list(ctx)],
+        "hardware": [serialize(hw) for hw in hardwares],
+        "links": links,
     }
 
 

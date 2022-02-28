@@ -30,6 +30,7 @@ class BlazarPhysicalHostWorker(BaseBlazarWorker):
 
     resource_type = "host"
     resource_path = "/os-hosts"
+    resource_pk = "hypervisor_hostname"
 
     fields = [
         WorkerField(

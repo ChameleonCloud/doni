@@ -67,25 +67,61 @@ def _assert_hardware_has_workers(hw_json):
 
 
 def test_get_all_hardware(
-    mocker, user_auth_headers, client: "FlaskClient", database: "utils.DBFixtures"
+    mocker,
+    user_auth_headers,
+    user_project_id,
+    client: "FlaskClient",
+    database: "utils.DBFixtures",
 ):
     mock_authorize = mocker.patch("doni.api.hardware.authorize")
-    hw = database.add_hardware()
+    hw = database.add_hardware(project_id=user_project_id)
+    # Also add a hardware NOT owned by this user/project.
+    database.add_hardware()
     res = client.get("/v1/hardware", headers=user_auth_headers)
     assert res.status_code == 200
     assert len(res.json["hardware"]) == 1
     _assert_hardware_json_ok(res.json["hardware"][0], _with_masked_sensitive_fields(hw))
-    mock_authorize.assert_called_once_with("hardware:get", AnyContext())
+    mock_authorize.assert_called_once_with(
+        "hardware:get", AnyContext(), {"project_id": user_project_id}
+    )
 
 
-def test_get_all_hardware_empty(mocker, user_auth_headers, client: "FlaskClient"):
+def test_get_all_hardware_empty(
+    mocker, user_auth_headers, user_project_id, client: "FlaskClient"
+):
     mock_authorize = mocker.patch("doni.api.hardware.authorize")
     res = client.get("/v1/hardware", headers=user_auth_headers)
     assert res.status_code == 200
     assert res.json == {
         "hardware": [],
+        "links": [],
     }
-    mock_authorize.assert_called_once_with("hardware:get", AnyContext())
+    mock_authorize.assert_called_once_with(
+        "hardware:get", AnyContext(), {"project_id": user_project_id}
+    )
+
+
+def test_get_all_hardware_all_projects_not_admin(
+    user_auth_headers,
+    client: "FlaskClient",
+    database: "utils.DBFixtures",
+):
+    database.add_hardware()
+    res = client.get("/v1/hardware?all_projects=True", headers=user_auth_headers)
+    assert res.status_code == 403
+    assert "hardware" not in res.json
+
+
+def test_get_all_hardware_all_projects_admin(
+    admin_auth_headers,
+    client: "FlaskClient",
+    database: "utils.DBFixtures",
+):
+    hw = database.add_hardware()
+    res = client.get("/v1/hardware?all_projects=True", headers=admin_auth_headers)
+    assert res.status_code == 200
+    assert len(res.json["hardware"]) == 1
+    _assert_hardware_json_ok(res.json["hardware"][0], _with_masked_sensitive_fields(hw))
 
 
 def test_get_one_hardware(

@@ -1,11 +1,10 @@
 from collections import defaultdict
-from re import I
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
 import jsonpatch
 from flask import make_response, request
 from oslo_log import log
-from oslo_utils import uuidutils
 
 from doni.common import exception
 from doni.objects import fields as doni_fields
@@ -348,3 +347,11 @@ def patch_validate_list(
             except _JSONPATCH_EXCEPTIONS:
                 pass
             validate_schema(f"{prefix}/{item_idx}", doc)
+
+
+def get_next_href(request, marker=None):
+    args = request.args.copy()
+    if marker:
+        args["marker"] = marker
+
+    return "{}?{}".format(request.base_url, urlencode(args))

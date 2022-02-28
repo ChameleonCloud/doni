@@ -94,7 +94,12 @@ def test_new_channel(
             return utils.MockResponse(200, {"channels": []})
         if method == "post" and path == "/channels":
             return utils.MockResponse(
-                201, {"uuid": fake_channel_uuid, "channel_type": "wireguard"}
+                201,
+                {
+                    "uuid": fake_channel_uuid,
+                    "channel_type": "wireguard",
+                    "properties": {},
+                },
             )
         raise NotImplementedError(f"Unexpected request signature: {method} {path}")
 
@@ -107,7 +112,7 @@ def test_new_channel(
     )
 
     assert isinstance(result, WorkerResult.Success)
-    assert result.payload["channels"]["user"] == fake_channel_uuid
+    assert result.payload["channels"]["user"]["uuid"] == fake_channel_uuid
 
 
 def test_update_channel_no_diff(
@@ -143,7 +148,7 @@ def test_update_channel_no_diff(
     )
 
     assert isinstance(result, WorkerResult.Success)
-    assert result.payload["channels"]["user"] == fake_channel_uuid
+    assert result.payload["channels"]["user"]["uuid"] == fake_channel_uuid
 
 
 def test_update_channel_diff(
@@ -191,7 +196,7 @@ def test_update_channel_diff(
     )
 
     assert isinstance(result, WorkerResult.Success)
-    assert result.payload["channels"]["user"] == fake_new_channel_uuid
+    assert result.payload["channels"]["user"]["uuid"] == fake_new_channel_uuid
 
 
 def test_delete_dangling_channels(

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from doni.common.context import RequestContext
     from doni.objects.base import DoniBase
+    from typing import Union
 
 CONF = cfg.CONF
 _ENFORCER = None
@@ -82,18 +83,19 @@ def get_oslo_policy_enforcer():
     return get_enforcer()
 
 
-def authorize(rule, context: "RequestContext", target: "DoniBase" = None):
+def authorize(rule, context: "RequestContext", target: "Union[DoniBase, dict]" = None):
     """Check if the request is authorized according to a given rule.
 
     Args:
         rule (str): The policy rule.
         context (RequestContext): The request context.
-        target (DoniBase): The target domain object, if any.
+        target (DoniBase|dict): The target domain object, if any.
 
     Raises:
         PolicyNotAuthorized: If the rule is not satisfied.
     """
-    target = target.as_dict() if target else {}
+    if callable(getattr(target, "as_dict", None)):
+        target = target.as_dict()
     return get_enforcer().authorize(
-        rule, target, context.to_policy_values(), do_raise=True
+        rule, target or {}, context.to_policy_values(), do_raise=True
     )

@@ -120,6 +120,7 @@ class Hardware(base.DoniObject):
         marker: str = None,
         sort_key: str = None,
         sort_dir: str = None,
+        project_id: str = None,
     ) -> "list[Hardware]":
         """Return a list of Hardware objects.
 
@@ -135,6 +136,10 @@ class Hardware(base.DoniObject):
             A list of :class:`Hardware` objects.
         """
         db_hardwares = cls.dbapi.get_hardware_list(
-            limit=limit, marker=marker, sort_key=sort_key, sort_dir=sort_dir
+            limit=limit,
+            marker=marker,
+            sort_key=sort_key,
+            sort_dir=sort_dir,
+            project_id=project_id,
         )
         return cls._from_db_object_list(context, db_hardwares)

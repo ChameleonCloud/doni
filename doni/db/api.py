@@ -192,9 +192,16 @@ class Connection(object):
             raise exception.HardwareNotFound(hardware=hardware_name)
 
     def get_hardware_list(
-        self, limit=None, marker=None, sort_key=None, sort_dir=None
+        self,
+        limit=None,
+        marker=None,
+        sort_key=None,
+        sort_dir=None,
+        project_id=None,
     ) -> "list[models.Hardware]":
         query = model_query(models.Hardware).filter_by(deleted=0)
+        if project_id:
+            query = query.filter_by(project_id=project_id)
         return _paginate_query(
             models.Hardware,
             limit,

@@ -98,6 +98,7 @@ def _get_devices_response(hw_list) -> dict:
     for hw in hw_list or []:
         hw_dict = {
             "id": TEST_BLAZAR_RESOURCE_ID,
+            "name": hw.name,
             "uid": hw.uuid,
             "device_type": "container",
             "device_driver": "k8s",
@@ -133,7 +134,6 @@ def _stub_blazar_device_exist(path, method, json, hw_list=None, device_details={
     elif method == "get" and path == f"/devices":
         return utils.MockResponse(200, _get_devices_response(hw_list))
     elif method == "put" and path == f"/devices/{TEST_BLAZAR_RESOURCE_ID}":
-        print(path, method, json)
         assert json["machine_name"] == "fake-machine_name"
         return utils.MockResponse(
             200,

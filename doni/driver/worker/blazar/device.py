@@ -27,7 +27,7 @@ class BlazarDeviceWorker(BaseBlazarWorker):
     ]
 
     @classmethod
-    def to_resource_name(cls, hardware: "Hardware") -> str:
+    def to_resource_pk(cls, hardware: "Hardware") -> str:
         # Devices are registered by name b/c Blazar will look up the kubelet in k8s
         # at resource create time, and kubelets are named after their hostname, which
         # is in turn set by the hardware name.

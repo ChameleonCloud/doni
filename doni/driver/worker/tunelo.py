@@ -46,7 +46,7 @@ class TuneloWorker(BaseWorker):
     def _to_state_details(self, channel):
         return {
             "uuid": channel["uuid"],
-            "peers": [peer["properties"] for peer in channel["peers"]],
+            "peers": [peer["properties"] for peer in channel.get("peers", [])],
             "endpoint": channel["properties"].get("endpoint"),
             "ip": channel["properties"].get("ip"),
         }

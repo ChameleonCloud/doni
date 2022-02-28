@@ -1,10 +1,11 @@
+from uuid import uuid4
+
 from flask.testing import FlaskClient
 from keystoneauth1 import fixture as ksa_fixture
 from keystonemiddleware.fixture import AuthTokenFixture
 import pytest
 
 from doni.flask import create_app
-from doni.tests.unit import utils
 
 
 @pytest.fixture
@@ -36,9 +37,15 @@ def _token_fixture(**kwargs):
 
 
 @pytest.fixture
-def user_auth_headers(tokens: "AuthTokenFixture") -> dict:
+def user_project_id() -> str:
+    return uuid4().hex
+
+
+@pytest.fixture
+def user_auth_headers(tokens: "AuthTokenFixture", user_project_id: "str") -> dict:
     token = _token_fixture()
-    token.set_project_scope()
+    token.set_project_scope(user_project_id)
+    token.add_role(name="member")
     token_id = tokens.add_token(token)
     return {"X-Auth-Token": token_id}
 

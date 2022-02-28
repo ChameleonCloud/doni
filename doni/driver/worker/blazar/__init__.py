@@ -54,6 +54,9 @@ class BaseBlazarWorker(BaseWorker):
     opts = []
     opt_group = "blazar"
 
+    # How will the resource be looked up?
+    resource_pk = "name"
+
     def register_opts(self, conf):
         super().register_opts(conf)
         auth_conf.register_auth_opts(conf, self.opt_group, service_type="reservation")
@@ -73,7 +76,7 @@ class BaseBlazarWorker(BaseWorker):
         }
 
     @classmethod
-    def to_resource_name(cls, hardware: "Hardware") -> str:
+    def to_resource_pk(cls, hardware: "Hardware") -> str:
         return hardware.uuid
 
     @classmethod
@@ -101,7 +104,7 @@ class BaseBlazarWorker(BaseWorker):
             # Without a cached resource_id, try to create a host. If the host exists,
             # blazar will match the uuid, and the request will fail.
             result = self._resource_create(
-                context, self.to_resource_name(hardware), self.expected_state(hardware)
+                context, self.to_resource_pk(hardware), self.expected_state(hardware)
             )
 
         if isinstance(result, WorkerResult.Defer):
@@ -191,7 +194,7 @@ class BaseBlazarWorker(BaseWorker):
         result = {}
         try:
             body = expected_state.copy()
-            body["name"] = name
+            body[self.resource_pk] = name
             resource = call_blazar(
                 context,
                 self.resource_path,
@@ -343,7 +346,7 @@ class BaseBlazarWorker(BaseWorker):
     def _find_resource(self, context: "RequestContext", name: "str") -> dict:
         """Look up resource in blazar by name.
 
-        If the blazar resource id is uknown or otherwise incorrect, the only option
+        If the blazar resource id is unknown or otherwise incorrect, the only option
         is to get the list of all resources from blazar, then search for matching
         name.
 
@@ -358,7 +361,7 @@ class BaseBlazarWorker(BaseWorker):
         )
         host_list = host_list_response.get(f"{self.resource_type}s")
         matching_host = next(
-            (host for host in host_list if host.get("name") == name),
+            (host for host in host_list if host.get(self.resource_pk) == name),
             None,
         )
         return matching_host
