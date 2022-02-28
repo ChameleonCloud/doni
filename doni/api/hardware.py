@@ -204,8 +204,11 @@ def get_all():
             }
         )
 
+    # Also batch-fetch all associated worker tasks
+    worker_tasks = WorkerTask.list_for_hardwares(ctx, [hw.uuid for hw in hardwares])
+
     return {
-        "hardware": [serialize(hw) for hw in hardwares],
+        "hardware": [serialize(hw, worker_tasks.get(hw.uuid)) for hw in hardwares],
         "links": links,
     }
 

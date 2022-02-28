@@ -64,5 +64,15 @@ class WorkerTask(base.DoniObject):
     def list_for_hardware(
         cls, context: "RequestContext", hardware_uuid: str
     ) -> "list[WorkerTask]":
-        db_workers = cls.dbapi.get_worker_tasks_for_hardware(hardware_uuid)
-        return cls._from_db_object_list(context, db_workers)
+        return cls.list_for_hardwares(context, [hardware_uuid]).get(hardware_uuid, [])
+
+    @classmethod
+    def list_for_hardwares(
+        cls, context: "RequestContext", hardware_uuids: "list[str]"
+    ) -> "dict[str, list[WorkerTask]]":
+        return {
+            hw_uuid: cls._from_db_object_list(context, db_workers)
+            for hw_uuid, db_workers in cls.dbapi.get_worker_tasks_for_hardware(
+                hardware_uuids
+            ).items()
+        }

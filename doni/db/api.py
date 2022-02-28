@@ -1,7 +1,7 @@
+import itertools
 import threading
 from typing import TYPE_CHECKING
 
-import oslo_db
 import sqlalchemy as sa
 from oslo_db import api as oslo_db_api
 from oslo_db import exception as db_exc
@@ -277,16 +277,22 @@ class Connection(object):
         return query.all()
 
     def get_worker_tasks_for_hardware(
-        self, hardware_uuid: str
-    ) -> "list[models.WorkerTask]":
+        self, hardware_uuids: "list[str]"
+    ) -> "dict[str, models.WorkerTask]":
         enabled_worker_types = driver_factory.worker_types().keys()
         query = (
             model_query(models.WorkerTask)
-            .filter(models.WorkerTask.hardware_uuid == hardware_uuid)
+            .filter(models.WorkerTask.hardware_uuid.in_(hardware_uuids))
             .filter(models.WorkerTask.worker_type.in_(enabled_worker_types))
+            .order_by(models.WorkerTask.hardware_uuid)
         )
         # TODO: how to communicate that hardware doesn't exist?
-        return query.all()
+        return {
+            hw_uuid: list(wt_iter)
+            for hw_uuid, wt_iter in itertools.groupby(
+                query.all(), lambda wt: wt.hardware_uuid
+            )
+        }
 
     @oslo_db_api.retry_on_deadlock
     def update_worker_task(
