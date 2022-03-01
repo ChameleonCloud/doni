@@ -28,7 +28,7 @@ _JSONPATCH_EXCEPTIONS = (
 
 
 def format_date(dateobj):
-    return dateobj.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return dateobj.replace(microsecond=0).isoformat()
 
 
 def object_to_dict(
