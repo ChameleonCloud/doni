@@ -27,6 +27,10 @@ _JSONPATCH_EXCEPTIONS = (
 )
 
 
+def format_date(dateobj):
+    return dateobj.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def object_to_dict(
     obj,
     include_created_at=True,
@@ -75,7 +79,7 @@ def object_to_dict(
         value = to_dict[field] = getattr(obj, field)
         empty_value = None
         if isinstance(obj.fields[field], doni_fields.DateTimeField) and value:
-            value = value.isoformat()
+            value = format_date(value)
 
         if value is not None:
             to_dict[field] = value

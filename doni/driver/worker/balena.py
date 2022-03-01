@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from oslo_config.cfg import DictOpt, StrOpt
 from oslo_log import log
 
+from doni.api import utils as api_utils
 from doni.common import args
 from doni.conf import CONF
 from doni.driver.worker.base import BaseWorker
@@ -126,10 +127,7 @@ class BalenaWorker(BaseWorker):
         state_details["device_id"] = balena_device["id"]
         state_details["fleet_id"] = balena_device["belongs_to__application"].get("__id")
         state_details["last_seen"] = (
-            datetime.now(tz=timezone.utc)
-            .replace(microsecond=0)
-            .isoformat()
-            .replace("+00:00", "Z")
+            api_utils.format_date(datetime.now(tz=timezone.utc))
             if balena_device["is_online"]
             else balena_device["last_connectivity_event"]
         )
