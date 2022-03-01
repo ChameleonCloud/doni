@@ -65,14 +65,19 @@ class TuneloWorker(BaseWorker):
             if isinstance(channel_state[channel_name], str):
                 channel_state[channel_name] = {"uuid": channel_state[channel_name]}
 
+        if hardware.deleted:
+            for channel_name, channel in channel_state.items():
+                self._call_tunelo(
+                    context, f"/channels/{channel['uuid']}", method="delete"
+                )
+                LOG.info(f"Deleted {channel_name} channel for {hardware.uuid}")
+            return WorkerResult.Success({"channels": None})
+
         # Mapping of channel UUIDs to their existing representations
         existing_channels = {
             c["uuid"]: c
             for c in self._call_tunelo(context, "/channels", method="get")["channels"]
         }
-
-        if hardware.deleted:
-            return WorkerResult.Defer(reason="Delete not yet implemented")
 
         # Channels which exist but we have no record of
         dangling_channels = set(existing_channels.keys()) - set(
