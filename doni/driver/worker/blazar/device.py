@@ -1,13 +1,13 @@
 from typing import TYPE_CHECKING
 
-from doni.driver.hardware_type.device import DEVICE_NAME_MAP
+from doni.driver.hardware_type.device import MACHINE_METADATA
 from doni.driver.worker.blazar import BaseBlazarWorker
 from doni.worker import WorkerField
 
 if TYPE_CHECKING:
     from doni.objects.hardware import Hardware
 
-UNKNOWN_DEVICE = "(unknown)"
+UNKNOWN_DEVICE = "unknown"
 
 
 class BlazarDeviceWorker(BaseBlazarWorker):
@@ -22,7 +22,7 @@ class BlazarDeviceWorker(BaseBlazarWorker):
                 "Which Blazar device driver plugin to use to make the device "
                 "reservable. Defaults to k8s."
             ),
-        )
+        ),
     ]
 
     @classmethod
@@ -35,13 +35,19 @@ class BlazarDeviceWorker(BaseBlazarWorker):
     @classmethod
     def expected_state(cls, hardware: "Hardware") -> dict:
         hw_props = hardware.properties
+        machine_name = hw_props.get("machine_name")
+        machine_meta = MACHINE_METADATA.get(machine_name, {})
         device_dict = {
             "uid": hardware.uuid,
             "device_driver": hw_props.get("blazar_device_driver"),
             "device_type": "container",
-            "machine_name": hw_props.get("machine_name"),
-            "device_name": DEVICE_NAME_MAP.get(hw_props.get("device_name"))
-            or UNKNOWN_DEVICE,
+            "machine_name": machine_name,
+            "device_name": machine_meta.get("full_name", UNKNOWN_DEVICE),
+            "vendor": machine_meta.get("vendor", UNKNOWN_DEVICE),
+            "model": machine_meta.get("model", UNKNOWN_DEVICE),
+            # This differentiates v1 devices (enrolled as Zun compute nodes) and v2
+            # devices (enrolled as k8s kubelets.)
+            "platform_version": "2",
         }
         return device_dict
 

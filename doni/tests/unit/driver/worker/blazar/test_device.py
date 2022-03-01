@@ -274,6 +274,9 @@ def test_no_updates_to_device(
                 "device_type": "container",
                 "machine_name": "fake-machine_name",
                 "device_name": UNKNOWN_DEVICE,
+                "vendor": UNKNOWN_DEVICE,
+                "model": UNKNOWN_DEVICE,
+                "platform_version": "2",
             },
         )
         if device_response:

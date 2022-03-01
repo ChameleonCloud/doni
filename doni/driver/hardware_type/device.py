@@ -6,10 +6,22 @@ from doni.worker import WorkerField
 # Full list of names:
 # https://www.balena.io/docs/reference/base-images/devicetypes/
 SUPPORTED_MACHINE_NAMES = ["jetson-nano", "raspberrypi3-64", "raspberrypi4-64"]
-DEVICE_NAME_MAP = {
-    "jetson-nano": "Nvidia Jetson Nano SD-CARD",
-    "raspberrypi3-64": "Raspberry Pi 3 (using 64bit OS)",
-    "raspberrypi4-64": "Raspberry Pi 4 (using 64bit OS)",
+MACHINE_METADATA = {
+    "jetson-nano": {
+        "full_name": "Nvidia Jetson Nano SD-CARD",
+        "vendor": "Nvidia",
+        "model": "Jetson Nano",
+    },
+    "raspberrypi3-64": {
+        "full_name": "Raspberry Pi 3 (using 64bit OS)",
+        "vendor": "Raspberry Pi",
+        "model": "3",
+    },
+    "raspberrypi4-64": {
+        "full_name": "Raspberry Pi 4 (using 64bit OS)",
+        "vendor": "Raspberry Pi",
+        "model": "4",
+    },
 }
 
 SUPPORTED_CHANNEL_TYPES = ["wireguard"]
