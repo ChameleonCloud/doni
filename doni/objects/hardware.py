@@ -12,13 +12,15 @@ if TYPE_CHECKING:
 @base.DoniObjectRegistry.register
 class Hardware(base.DoniObject):
     # Version 1.0: Initial version
-    VERSION = "1.0"
+    # Version 1.1: Add 'deleted' field
+    VERSION = "1.1"
 
     dbapi = db_api.get_instance()
 
     fields = {
         "id": object_fields.IntegerField(),
         "uuid": object_fields.UUIDField(),
+        "deleted": object_fields.IntegerField(),
         "hardware_type": object_fields.StringField(),
         "project_id": object_fields.StringField(),
         "name": object_fields.StringField(),
