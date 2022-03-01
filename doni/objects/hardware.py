@@ -121,6 +121,7 @@ class Hardware(base.DoniObject):
         sort_key: str = None,
         sort_dir: str = None,
         project_id: str = None,
+        deleted: bool = None,
     ) -> "list[Hardware]":
         """Return a list of Hardware objects.
 
@@ -131,6 +132,9 @@ class Hardware(base.DoniObject):
             marker (str): pagination marker for large data sets.
             sort_key (str): column to sort results by.
             sort_dir (str): direction to sort. "asc" or "desc".
+            project_id (str): only include hardware under this project_id, if specified.
+            deleted (bool): include deleted hardware, by default deleted items are not
+                included in the returned list.
 
         Returns:
             A list of :class:`Hardware` objects.
@@ -141,5 +145,6 @@ class Hardware(base.DoniObject):
             sort_key=sort_key,
             sort_dir=sort_dir,
             project_id=project_id,
+            deleted=deleted,
         )
         return cls._from_db_object_list(context, db_hardwares)

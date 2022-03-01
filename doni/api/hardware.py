@@ -239,7 +239,9 @@ def destroy(hardware_uuid=None):
     ctx = request.context
     hardware = Hardware.get_by_uuid(ctx, hardware_uuid)
     authorize("hardware:delete", ctx, hardware)
-    hardware.destroy()
+    with transaction():
+        hardware.destroy()
+        _mark_tasks_pending(WorkerTask.list_for_hardware(ctx, hardware_uuid))
     return None
 
 
@@ -314,12 +316,8 @@ def update(hardware_uuid=None, patch=None):
             for window in to_remove:
                 window.destroy()
 
-        worker_tasks = WorkerTask.list_for_hardware(ctx, hardware.uuid)
-        for task in worker_tasks:
-            if not (task.is_pending or task.is_in_progress):
-                # Take care not to interrupt tasks in progress
-                task.state = WorkerState.PENDING
-                task.save()
+        worker_tasks = WorkerTask.list_for_hardware(ctx, hardware_uuid)
+        _mark_tasks_pending(worker_tasks)
 
     return serialize(hardware, worker_tasks=worker_tasks)
 
@@ -331,9 +329,13 @@ def sync(hardware_uuid=None):
     hardware = Hardware.get_by_uuid(ctx, hardware_uuid)
     authorize("hardware:update", ctx, hardware)
     with transaction():
-        for task in WorkerTask.list_for_hardware(ctx, hardware_uuid):
-            # Take care not to interrupt tasks in progress
-            if not (task.is_pending or task.is_in_progress):
-                task.state = WorkerState.PENDING
-                task.save()
+        _mark_tasks_pending(WorkerTask.list_for_hardware(ctx, hardware_uuid))
     return None
+
+
+def _mark_tasks_pending(worker_tasks: "list[WorkerTask]"):
+    for task in worker_tasks:
+        if not (task.is_pending or task.is_in_progress):
+            # Take care not to interrupt tasks in progress
+            task.state = WorkerState.PENDING
+            task.save()

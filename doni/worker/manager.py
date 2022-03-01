@@ -104,7 +104,9 @@ class WorkerManager(object):
         spacing=CONF.worker.process_pending_task_interval, run_immediately=True
     )
     def process_pending(self, admin_context: "doni_context.RequestContext"):
-        hardware_table = {hw.uuid: hw for hw in Hardware.list(admin_context)}
+        hardware_table = {
+            hw.uuid: hw for hw in Hardware.list(admin_context, deleted=True)
+        }
         availability_table = defaultdict(list)
         for aw in AvailabilityWindow.list(admin_context):
             availability_table[aw.hardware_uuid].append(aw)
@@ -204,7 +206,12 @@ class WorkerManager(object):
                 state_details[DEFER_COUNT_DETAIL] = (
                     state_details.get(DEFER_COUNT_DETAIL, 0) + 1
                 )
-                state_details.update(process_result.payload)
+                for key, value in process_result.payload:
+                    if value is None:
+                        # Treat setting to None as deletion
+                        state_details.pop(key, None)
+                    else:
+                        state_details[key] = value
                 task.state_details = state_details
             elif isinstance(process_result, WorkerResult.Success):
                 LOG.info(

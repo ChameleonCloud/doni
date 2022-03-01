@@ -94,8 +94,34 @@ class BaseBlazarWorker(BaseWorker):
         availability_windows: "list[AvailabilityWindow]" = None,
         state_details: "dict" = None,
     ) -> "WorkerResult.Base":
-        # If we know the resource_id, then update that host. Otherwise, create it.
         resource_id = state_details.get("blazar_resource_id")
+
+        # For deletions, we need to go in reverse order; ensure we clean up the
+        # availability window leases before deleting the resource in Blazar.
+        if hardware.deleted:
+            result = self.process_availability_windows(
+                context, hardware, availability_windows, WorkerResult.Success()
+            )
+            if not isinstance(result, WorkerResult.Success):
+                return result
+            if not resource_id:
+                raise BlazarIsWrongError(
+                    (
+                        f"Tried to delete resource for {hardware.uuid}, but no record of "
+                        "matching Blazar resource"
+                    )
+                )
+            # TODO: Are there any other leases? Try to detect this (is there a specific
+            # error message in Blazar?) and return a deferred result if so.
+            self._resource_delete(context, resource_id)
+            return WorkerResult.Success(
+                {
+                    "blazar_resource_id": None,
+                    "resource_created_at": None,
+                    "resource_deleted_at": datetime.utcnow(),
+                }
+            )
+
         if resource_id:
             result = self._resource_update(
                 context, resource_id, self.expected_state(hardware)
@@ -203,11 +229,12 @@ class BaseBlazarWorker(BaseWorker):
             ).get(self.resource_type)
         except KeystoneServiceAPIError as exc:
             if exc.code == 404:
-                result["message"] = (
-                    "Can not make resource reservable, as the underlying entity "
-                    "could not be found."
+                return WorkerResult.Defer(
+                    reason=(
+                        "Can not make resource reservable, as the underlying entity "
+                        "could not be found."
+                    )
                 )
-                return WorkerResult.Defer(result)
             elif exc.code == 409:
                 resource = self._find_resource(context, name)
                 if resource:
@@ -256,10 +283,12 @@ class BaseBlazarWorker(BaseWorker):
             if exc.code == 404:
                 # remove invalid stored resource_id and retry after defer
                 result["blazar_resource_id"] = None
-                return WorkerResult.Defer(result)
+                return WorkerResult.Defer(result, reason="Resource not found")
             elif exc.code == 409:
                 # Host cannot be updated, referenced by current lease
-                return WorkerResult.Defer(result)
+                return WorkerResult.Defer(
+                    result, reason="Active leases exist for resource"
+                )
 
             raise  # Unhandled exception
         else:
@@ -267,6 +296,9 @@ class BaseBlazarWorker(BaseWorker):
             result["blazar_resource_id"] = expected_state.get("id")
             result["resource_updated_at"] = expected_state.get("updated_at")
             return WorkerResult.Success(result)
+
+    def _resource_delete(self, context: "RequestContext", resource_id: "str"):
+        call_blazar(context, f"{self.resource_path}/{resource_id}", method="delete")
 
     def _lease_list(self, context: "RequestContext", hardware: "Hardware"):
         """Get list of all leases from blazar. Return dict of blazar response."""

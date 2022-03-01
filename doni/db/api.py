@@ -198,8 +198,11 @@ class Connection(object):
         sort_key=None,
         sort_dir=None,
         project_id=None,
+        deleted=False,
     ) -> "list[models.Hardware]":
-        query = model_query(models.Hardware).filter_by(deleted=0)
+        query = model_query(models.Hardware)
+        if not deleted:
+            query = query.filter_by(deleted=0)
         if project_id:
             query = query.filter_by(project_id=project_id)
         return _paginate_query(

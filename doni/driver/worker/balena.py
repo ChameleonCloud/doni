@@ -97,7 +97,17 @@ class BalenaWorker(BaseWorker):
         availability_windows: "list[AvailabilityWindow]" = None,
         state_details: "dict" = None,
     ) -> "WorkerResult.Base":
-        device_id = self._to_device_id(hardware.uuid)
+        if hardware.deleted:
+            self._delete_device(hardware)
+            return WorkerResult.Success(
+                {
+                    "device_id": None,
+                    "device_api_key": None,
+                    "fleet_id": None,
+                    "last_seen": None,
+                }
+            )
+
         balena_device = self._register_device(hardware)
         self._sync_device_var(
             hardware.uuid,
@@ -113,6 +123,7 @@ class BalenaWorker(BaseWorker):
         )
 
         balena = _get_balena_sdk()
+        device_id = self._to_device_id(hardware.uuid)
 
         if "device_api_key" not in state_details:
             # Generate a device key and store on the state; the device owner (user)
@@ -159,6 +170,11 @@ class BalenaWorker(BaseWorker):
             LOG.info(f"Registered new device for {hardware.uuid}")
 
         return device
+
+    def _delete_device(self, hardware: "Hardware"):
+        balena = _get_balena_sdk()
+        balena.models.device.remove(self._to_device_id(hardware))
+        LOG.info(f"Deleted device for {hardware.uuid}")
 
     def _to_device_id(self, hardware_uuid: str):
         return hardware_uuid.replace("-", "")

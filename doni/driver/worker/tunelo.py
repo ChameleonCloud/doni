@@ -71,6 +71,9 @@ class TuneloWorker(BaseWorker):
             for c in self._call_tunelo(context, "/channels", method="get")["channels"]
         }
 
+        if hardware.deleted:
+            return WorkerResult.Defer(reason="Delete not yet implemented")
+
         # Channels which exist but we have no record of
         dangling_channels = set(existing_channels.keys()) - set(
             [channel["uuid"] for channel in channel_state.values()]
