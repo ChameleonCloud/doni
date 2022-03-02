@@ -1,22 +1,14 @@
 name: execute kolla build
 
-on:
-  push:
-    branches:
-      - "main"
-    tags:
-      - "v*"
-  workflow_dispatch:
+on: push
 
 jobs:
-  trigger_build:
+  build_containers:
     runs-on: ubuntu-latest
     steps:
-      - name: Invoke workflow in another repo with inputs
-        uses: benc-uk/workflow-dispatch@v1
+      - name: build doni containers
+        uses: ChameleonCloud/ciab-build-action@main
         with:
-          workflow: ci
-          repo: ChameleonCloud/kolla-containers
-          ref: refs/heads/master
-          token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          inputs: '{ "kolla_build_profile": "doni", "push": "yes" }'
+          config_set: x86_ubuntu
+          kolla_build_profile: doni
+          push: no
