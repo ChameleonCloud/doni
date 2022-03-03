@@ -9,12 +9,12 @@ jobs:
       - name: get short git sha
         run: |
           echo \
-          "SHORT_SHA=$(git rev-parse --short ${GITHUB_SHA})" \
+          "SHORT_SHA=${GITHUB_SHA::7}" \
           >> $GITHUB_ENV
       - name: build doni containers
         uses: ChameleonCloud/ciab-build-action@main
         with:
           config_set: x86_ubuntu
           kolla_build_profile: doni
-          docker_tag: ${SHORT_SHA}
+          docker_tag: ${{ env.SHORT_SHA }}
           push: no
