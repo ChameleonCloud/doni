@@ -12,6 +12,12 @@ if TYPE_CHECKING:
     from doni.objects.availability_window import AvailabilityWindow
     from doni.objects.hardware import Hardware
 
+# Kubernetes 10.x/12.x support
+try:
+    K8sApiException = client.ApiException  # >=12.x
+except:
+    K8sApiException = client.api_client.ApiException
+
 _KUBERNETES_CLIENT = None
 
 
@@ -77,7 +83,7 @@ class K8sWorker(BaseWorker):
                         }
                     },
                 )
-            except client.ApiException as exc:
+            except K8sApiException as exc:
                 if exc.status == 404:
                     return WorkerResult.Defer(reason="No matching k8s node found")
                 else:
