@@ -68,7 +68,7 @@ class K8sWorker(BaseWorker):
         # Expand config structure from "key1=value1,key2=value2" to dict
         expected_labels = {
             key: value
-            for label_spec in (expected_labels.split(",") if expected_labels else [])
+            for label_spec in (expected_labels.split("|") if expected_labels else [])
             for key, value in label_spec.split("=")
         }
 
