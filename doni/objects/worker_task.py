@@ -76,3 +76,8 @@ class WorkerTask(base.DoniObject):
                 hardware_uuids
             ).items()
         }
+
+    @classmethod
+    def backfill_missing(cls, context: "RequestContext") -> "list[WorkerTask]":
+        db_backfilled_tasks = cls.dbapi.backfill_worker_tasks()
+        return cls._from_db_object_list(context, db_backfilled_tasks)

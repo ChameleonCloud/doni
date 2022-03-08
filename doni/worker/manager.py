@@ -89,6 +89,12 @@ class WorkerManager(object):
             LOG.error(msg, self.host)
             raise exception.DriversNotLoaded(host=self.host)
 
+        # Lazy-initialize any new workers that are now configured, but were not
+        # when hardware was initially created.
+        backfilled_tasks = WorkerTask.backfill_missing(admin_context)
+        if backfilled_tasks:
+            LOG.info("Backfilled %s missing worker tasks", len(backfilled_tasks))
+
         self._periodic_tasks = self._collect_periodic_tasks(
             list(worker_types.values()), admin_context
         )
@@ -110,6 +116,7 @@ class WorkerManager(object):
         availability_table = defaultdict(list)
         for aw in AvailabilityWindow.list(admin_context):
             availability_table[aw.hardware_uuid].append(aw)
+
         pending_tasks = WorkerTask.list_pending(admin_context)
 
         # Attempt to execute tasks in parallel if possible. We assume that

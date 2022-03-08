@@ -139,6 +139,43 @@ class Connection(object):
                 raise exception.HardwareAlreadyExists(uuid=values["uuid"])
         return hardware
 
+    @oslo_db_api.retry_on_deadlock
+    def backfill_worker_tasks(self) -> "list[models.WorkerTask]":
+        hardwares = {hw.uuid: hw for hw in self.get_hardware_list()}
+        worker_tasks = self.get_worker_tasks_for_hardware(hardwares.keys())
+
+        enabled_worker_types = driver_factory.worker_types()
+
+        missing_worker_tasks = []
+        for hardware_uuid, hw in hardwares.items():
+            hardware_type = driver_factory.get_hardware_type(hw.hardware_type)
+            existing_worker_types = [
+                wt.worker_type for wt in worker_tasks.get(hardware_uuid, [])
+            ]
+
+            for worker_type in hardware_type.enabled_workers:
+                if worker_type not in enabled_worker_types:
+                    continue
+                if worker_type in existing_worker_types:
+                    # Worker already exists
+                    continue
+                task = models.WorkerTask()
+                task.update(
+                    {
+                        "uuid": uuidutils.generate_uuid(),
+                        "hardware_uuid": hardware_uuid,
+                        "worker_type": worker_type,
+                        "state": WorkerState.PENDING,
+                    }
+                )
+                missing_worker_tasks.append(task)
+
+        with _session_for_write() as session:
+            for task in missing_worker_tasks:
+                session.add(task)
+
+        return missing_worker_tasks
+
     @staticmethod
     def _hardware_by_uuid(session, hardware_uuid: str):
         return session.query(models.Hardware).filter_by(uuid=hardware_uuid, deleted=0)
@@ -281,7 +318,7 @@ class Connection(object):
 
     def get_worker_tasks_for_hardware(
         self, hardware_uuids: "list[str]"
-    ) -> "dict[str, models.WorkerTask]":
+    ) -> "dict[str, list[models.WorkerTask]]":
         enabled_worker_types = driver_factory.worker_types().keys()
         query = (
             model_query(models.WorkerTask)
