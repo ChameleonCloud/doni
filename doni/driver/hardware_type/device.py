@@ -83,6 +83,7 @@ class BalenaDevice(BaseHardwareType):
     enabled_workers = (
         "balena",
         "blazar.device",
+        "k8s",
         "tunelo",
     )
 
