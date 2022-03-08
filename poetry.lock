@@ -1939,7 +1939,7 @@ balena = ["balena-sdk"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.6"
-content-hash = "ad999797de54e2d85d3766a1d73332fe8642041c968315f6ea649dcd519f3f8b"
+content-hash = "5869b3fc6dd472cc34b8ad50dd03c606048f1c0b4b2f6b80c0263c23d8871d22"
 
 [metadata.files]
 alembic = [
