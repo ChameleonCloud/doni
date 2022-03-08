@@ -91,9 +91,14 @@ class WorkerManager(object):
 
         # Lazy-initialize any new workers that are now configured, but were not
         # when hardware was initially created.
-        backfilled_tasks = WorkerTask.backfill_missing(admin_context)
-        if backfilled_tasks:
-            LOG.info("Backfilled %s missing worker tasks", len(backfilled_tasks))
+        # Note: this is done as an async submission to get out of the way of manager
+        # initialization.
+        backfill_worker = self._executor.submit(
+            WorkerTask.backfill_missing, admin_context
+        )
+        backfill_worker.add_done_callback(
+            lambda tasks: LOG.info("Backfilled %s missing worker tasks", len(tasks))
+        )
 
         self._periodic_tasks = self._collect_periodic_tasks(
             list(worker_types.values()), admin_context

@@ -20,7 +20,7 @@ class Hardware(base.DoniObject):
     fields = {
         "id": object_fields.IntegerField(),
         "uuid": object_fields.UUIDField(),
-        "deleted": object_fields.IntegerField(),
+        "deleted": object_fields.IntegerField(nullable=True),
         "hardware_type": object_fields.StringField(),
         "project_id": object_fields.StringField(),
         "name": object_fields.StringField(),
