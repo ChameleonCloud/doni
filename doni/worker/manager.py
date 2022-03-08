@@ -96,9 +96,7 @@ class WorkerManager(object):
         backfill_worker = self._executor.submit(
             WorkerTask.backfill_missing, admin_context
         )
-        backfill_worker.add_done_callback(
-            lambda tasks: LOG.info("Backfilled %s missing worker tasks", len(tasks))
-        )
+        backfill_worker.add_done_callback(self._report_backfill_result)
 
         self._periodic_tasks = self._collect_periodic_tasks(
             list(worker_types.values()), admin_context
@@ -282,6 +280,14 @@ class WorkerManager(object):
         self._executor.shutdown(wait=True)
 
         self._started = False
+
+    def _report_backfill_result(self, fut):
+        try:
+            backfilled_tasks = fut.result()
+        except Exception as exc:
+            LOG.warning("Failed to backfill missing workers: %s", exc)
+        else:
+            LOG.info("Backfilled %s missing worker tasks", len(backfilled_tasks))
 
     def _on_periodic_tasks_stop(self, fut):
         try:
