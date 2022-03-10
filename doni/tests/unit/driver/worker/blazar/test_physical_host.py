@@ -67,17 +67,16 @@ def blazar_worker(test_config):
     return worker
 
 
-def get_fake_hardware(database: "utils.DBFixtures"):
+def get_fake_hardware(database: "utils.DBFixtures", hw_props: "dict" = {}):
     """Add a dummy hw device to the DB for testing."""
+    hw_props.setdefault("baremetal_driver", "fake-driver")
+    hw_props.setdefault("management_address", "fake-management_address")
+    hw_props.setdefault("ipmi_username", "fake-ipmi_username")
+    hw_props.setdefault("ipmi_password", "fake-ipmi_password")
     db_hw = database.add_hardware(
         uuid=TEST_HARDWARE_UUID,
         hardware_type="baremetal",
-        properties={
-            "baremetal_driver": "fake-driver",
-            "management_address": "fake-management_address",
-            "ipmi_username": "fake-ipmi_username",
-            "ipmi_password": "fake-ipmi_password",
-        },
+        properties=hw_props,
     )
     return Hardware(**db_hw)
 
@@ -89,6 +88,16 @@ def get_mocked_blazar(mocker, request_fn):
     mock_request.side_effect = request_fn
     mocker.patch(
         "doni.driver.worker.blazar._get_blazar_adapter"
+    ).return_value = mock_adapter
+    return mock_request
+
+
+def get_mocked_keystone(mocker, request_fn):
+    mock_adapter = mock.MagicMock()
+    mock_request = mock_adapter.request
+    mock_request.side_effect = request_fn
+    mocker.patch(
+        "doni.driver.worker.blazar._get_keystone_adapter"
     ).return_value = mock_adapter
     return mock_request
 
@@ -285,6 +294,57 @@ def test_no_updates_to_host(
     assert isinstance(result, WorkerResult.Success)
     # 1 call to check host, 1 call to check leases
     assert blazar_request.call_count == 2
+
+
+def test_authorized_projects(
+    mocker,
+    admin_context: "RequestContext",
+    blazar_worker: "BlazarPhysicalHostWorker",
+    database: "utils.DBFixtures",
+):
+    fake_project_name = "fake-project_name"
+    fake_project_id = uuidutils.generate_uuid(dashed=False)
+    deref_project_id = uuidutils.generate_uuid(dashed=False)
+    hw_to_add = get_fake_hardware(
+        database,
+        {
+            "authorized_projects": [fake_project_name, fake_project_id],
+            "authorized_projects_reason": "fake-reason",
+        },
+    )
+    hw_list = [hw_to_add]
+
+    def _stub_keystone_request(path, method=None, **kwargs):
+        if method == "get":
+            # Ensure we looked up the right one
+            assert f"name={fake_project_name}" in path
+            return utils.MockResponse(200, {"projects": [{"id": deref_project_id}]})
+
+    def _stub_blazar_request(path, method=None, json=None, **kwargs):
+        host_response = _stub_blazar_host_exist(path, method, json, hw_list)
+        if not host_response:
+            raise NotImplementedError(f"Unexpected request signature: {method} {path}")
+        if method == "put":
+            # Check that authorized projects were looked up OK
+            assert (
+                json["authorized_projects"] == f"{deref_project_id},{fake_project_id}"
+            )
+            assert json["restricted_reason"] == "fake-reason"
+        return host_response
+
+    keystone_request = get_mocked_keystone(mocker, _stub_keystone_request)
+    blazar_request = get_mocked_blazar(mocker, _stub_blazar_request)
+    result = blazar_worker.process(
+        context=admin_context,
+        hardware=hw_to_add,
+        state_details=TEST_STATE_DETAILS,
+    )
+
+    assert isinstance(result, WorkerResult.Success)
+    # 1 call to check host, 1 to update host, 1 call to check leases
+    assert blazar_request.call_count == 3
+    # Should have looked up 1 project only
+    assert keystone_request.call_count == 1
 
 
 def _stub_blazar_lease_new(path, method, json, lease_dict):

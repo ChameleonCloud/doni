@@ -2,23 +2,28 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from dateutil.parser import parse
+from oslo_log import log as logging
+from oslo_utils import uuidutils
 from pytz import UTC
 
-from doni.common import exception, keystone
+from doni.common import args, exception, keystone
 from doni.conf import auth as auth_conf
 from doni.driver.util import ks_service_requestor, KeystoneServiceAPIError
 from doni.driver.worker.base import BaseWorker
-from doni.worker import WorkerResult
+from doni.worker import WorkerField, WorkerResult
 
 if TYPE_CHECKING:
     from doni.common.context import RequestContext
     from doni.objects.availability_window import AvailabilityWindow
     from doni.objects.hardware import Hardware
 
+LOG = logging.getLogger(__name__)
+
 BLAZAR_API_VERSION = "1"
 BLAZAR_API_MICROVERSION = "1.0"
 BLAZAR_DATE_FORMAT = "%Y-%m-%d %H:%M"
 _BLAZAR_ADAPTER = None
+_KEYSTONE_ADAPTER = None
 
 AW_LEASE_PREFIX = "availability_window_"
 
@@ -45,6 +50,23 @@ def call_blazar(*args, **kwargs):
     return ks_service_requestor("Blazar", _get_blazar_adapter)(*args, **kwargs)
 
 
+def _get_keystone_adapter():
+    """Adapter for calling the Keystone service itself (e.g., to look up projects)"""
+    global _KEYSTONE_ADAPTER
+    if not _KEYSTONE_ADAPTER:
+        _KEYSTONE_ADAPTER = keystone.get_adapter(
+            "keystone_authtoken",
+            session=keystone.get_session("keystone_authtoken"),
+            auth=keystone.get_auth("keystone_authtoken"),
+            version=3,
+        )
+    return _KEYSTONE_ADAPTER
+
+
+def call_keystone(*args, **kwargs):
+    return ks_service_requestor("Keystone", _get_keystone_adapter)(*args, **kwargs)
+
+
 class BaseBlazarWorker(BaseWorker):
     """A base Blazar worker that syncs a Hardware to some Blazar resource.
 
@@ -56,6 +78,25 @@ class BaseBlazarWorker(BaseWorker):
 
     # How will the resource be looked up?
     resource_pk = "name"
+
+    fields = [
+        WorkerField(
+            "authorized_projects",
+            schema=args.array(args.STRING),
+            description=(
+                "Only users in projects specified in this list will be able to reserve "
+                "the resource. Specify project names or IDs."
+            ),
+        ),
+        WorkerField(
+            "authorized_projects_reason",
+            schema=args.STRING,
+            description=(
+                "An optional display reason to explain why the resource is restricted "
+                "to only certain projects."
+            ),
+        ),
+    ]
 
     def register_opts(self, conf):
         super().register_opts(conf)
@@ -84,7 +125,17 @@ class BaseBlazarWorker(BaseWorker):
         raise NotImplementedError()
 
     @classmethod
-    def expected_state(cls, hardware: "Hardware") -> dict:
+    def expected_state(cls, hardware: "Hardware", state: "dict") -> dict:
+        """Compute the desired state of Blazar resource properties.
+
+        Args:
+            hardware (Hardware): the hardware item.
+            state (dict): the state object. This will contain some base/generic state,
+                which concrete classes can extend or override as needed.
+
+        Returns:
+            a dict of the desired state in Blazar.
+        """
         raise NotImplementedError()
 
     def process(
@@ -122,15 +173,39 @@ class BaseBlazarWorker(BaseWorker):
                 }
             )
 
+        expected_state = {}
+        # Populate base fields
+        hw_props = hardware.properties
+        if hw_props.get("authorized_projects") is not None:
+            deref_projects = []
+            for project_ref in hw_props["authorized_projects"]:
+                if uuidutils.is_uuid_like(project_ref):
+                    deref_projects.append(project_ref)
+                else:
+                    matching = call_keystone(
+                        context, f"/v3/projects?name={project_ref}"
+                    )["projects"]
+                    if matching:
+                        deref_projects.append(matching[0]["id"])
+                    else:
+                        LOG.warning(
+                            f"Failed to look up authorized_project '{project_ref}' by name"
+                        )
+
+            expected_state["authorized_projects"] = ",".join(deref_projects)
+        if hw_props.get("authorized_projects_reason") is not None:
+            expected_state["restricted_reason"] = hw_props["authorized_projects_reason"]
+
+        # Allow concrete classes to extend state
+        expected_state = self.expected_state(hardware, expected_state)
+
         if resource_id:
-            result = self._resource_update(
-                context, resource_id, self.expected_state(hardware)
-            )
+            result = self._resource_update(context, resource_id, expected_state)
         else:
             # Without a cached resource_id, try to create a host. If the host exists,
             # blazar will match the uuid, and the request will fail.
             result = self._resource_create(
-                context, self.to_resource_pk(hardware), self.expected_state(hardware)
+                context, self.to_resource_pk(hardware), expected_state
             )
 
         if isinstance(result, WorkerResult.Defer):

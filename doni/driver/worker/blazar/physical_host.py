@@ -32,7 +32,7 @@ class BlazarPhysicalHostWorker(BaseBlazarWorker):
     resource_path = "/os-hosts"
     resource_pk = "hypervisor_hostname"
 
-    fields = [
+    fields = BaseBlazarWorker.fields + [
         WorkerField(
             "node_type",
             schema=args.STRING,
@@ -51,10 +51,10 @@ class BlazarPhysicalHostWorker(BaseBlazarWorker):
         ),
     ]
 
-    def expected_state(self, hardware: "Hardware") -> dict:
+    def expected_state(self, hardware: "Hardware", host_dict: "dict") -> dict:
         hw_props = hardware.properties
         placement_props = hw_props.get("placement", {})
-        host_dict = {"uid": hardware.uuid, "node_name": hardware.name}
+        host_dict.update({"uid": hardware.uuid, "node_name": hardware.name})
 
         # FIXME(jason): Currently Blazar does not allow deleting extra capabilities,
         # and setting to None triggers errors in Blazar during create/update.
