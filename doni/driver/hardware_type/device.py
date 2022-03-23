@@ -5,12 +5,17 @@ from doni.worker import WorkerField
 
 # Full list of names:
 # https://www.balena.io/docs/reference/base-images/devicetypes/
-SUPPORTED_MACHINE_NAMES = ["jetson-nano", "raspberrypi3-64", "raspberrypi4-64"]
+SUPPORTED_MACHINE_NAMES = ["jetson-nano", "jetson-xavier-nx-emmc", "raspberrypi3-64", "raspberrypi4-64"]
 MACHINE_METADATA = {
     "jetson-nano": {
         "full_name": "Nvidia Jetson Nano SD-CARD",
         "vendor": "Nvidia",
         "model": "Jetson Nano",
+    },
+    "jetson-xavier-nx-emmc": {
+        "full_name": "Nvidia Jetson Xavier NX eMMC",
+        "vendor": "Nvidia",
+        "model": "Jetson Xavier NX",
     },
     "raspberrypi3-64": {
         "full_name": "Raspberry Pi 3 (using 64bit OS)",
