@@ -93,6 +93,7 @@ class TuneloWorker(BaseWorker):
                     if not self._differs(channel_props, existing):
                         # Nothing to do, move on, but save current channel details
                         channel_state[channel_name] = self._to_state_details(existing)
+                        LOG.debug(f"Channel {channel_uuid} unchanged")
                         continue
                     else:
                         # Recreate if representation differs
@@ -133,6 +134,10 @@ class TuneloWorker(BaseWorker):
         if chan_a["channel_type"] != tunelo_channel["channel_type"]:
             return True
         elif chan_a["public_key"] != tunelo_channel["properties"]["public_key"]:
+            return True
+        # FIXME(jason): this is a hacky workaround in some cases where the tunnel
+        # is stuck in a half-provisioned state (it should have the hub in the peer list)
+        elif not tunelo_channel.get("peers"):
             return True
         return False
 
