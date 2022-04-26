@@ -150,14 +150,28 @@ class BalenaWorker(BaseWorker):
 
         balena = _get_balena_sdk()
         device_id = self._to_device_id(hardware.uuid)
+        machine_name = hardware.properties.get("machine_name")
+
+        def set_device_type():
+            # This function isn't available in the SDK but we can implement
+            # using some available primitives.
+            return balena.models.device.base_request.request(
+                "device",
+                "PATCH",
+                params={"filter": "uuid", "eq": device_id},
+                data={"device_type": machine_name},
+                endpoint=balena.models.device.settings.get("pine_endpoint"),
+            )
 
         try:
             device = balena.models.device.get(device_id)
             if device["device_name"] != hardware.name:
                 balena.models.device.rename(device_id, hardware.name)
                 LOG.info(f"Updated device name for {hardware.uuid}")
+            if device["device_type"] != machine_name:
+                set_device_type()
+                LOG.info(f"Updated device type for {hardware.uuid}")
         except DeviceNotFound:
-            machine_name = hardware.properties.get("machine_name")
             fleet_name = CONF.balena.device_fleet_mapping.get(machine_name)
             if not fleet_name:
                 raise ValueError(
@@ -167,6 +181,7 @@ class BalenaWorker(BaseWorker):
             device = balena.models.device.register(fleet["id"], device_id)
             # Balena will have auto-assigned a device name, change to user-specified
             balena.models.device.rename(device_id, hardware.name)
+            set_device_type()
             LOG.info(f"Registered new device for {hardware.uuid}")
             # Perform one additional fetch; when the device is returned from the
             # register endpoint, it is missing the belongs_to__application field,
