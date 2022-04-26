@@ -80,9 +80,9 @@ class TuneloWorker(BaseWorker):
         }
 
         # Channels which exist but we have no record of
-        dangling_channels = set(existing_channels.keys()) - set(
-            [channel["uuid"] for channel in channel_state.values()]
-        )
+        # dangling_channels = set(existing_channels.keys()) - set(
+        #     [channel["uuid"] for channel in channel_state.values()]
+        # )
         hw_channels = hardware.properties.get("channels", {})
         for channel_name, channel_props in hw_channels.items():
             stored_channel = channel_state.get(channel_name)
@@ -123,9 +123,9 @@ class TuneloWorker(BaseWorker):
             LOG.info(f"Created new {channel_name} channel at {channel['uuid']}")
             channel_state[channel_name] = self._to_state_details(channel)
 
-        for channel_uuid in dangling_channels:
-            self._call_tunelo(context, f"/channels/{channel_uuid}", method="delete")
-            LOG.info(f"Deleted dangling channel {channel_uuid}")
+        # for channel_uuid in dangling_channels:
+        #     self._call_tunelo(context, f"/channels/{channel_uuid}", method="delete")
+        #     LOG.info(f"Deleted dangling channel {channel_uuid}")
 
         return WorkerResult.Success(state_details)
 
