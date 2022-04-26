@@ -152,6 +152,11 @@ class BalenaWorker(BaseWorker):
         device_id = self._to_device_id(hardware.uuid)
         machine_name = hardware.properties.get("machine_name")
 
+        device_types = {
+            device_type["slug"]: device_type["id"]
+            for device_type in balena.models.config.get_device_types()
+        }
+
         def set_device_type():
             # This function isn't available in the SDK but we can implement
             # using some available primitives.
@@ -159,7 +164,7 @@ class BalenaWorker(BaseWorker):
                 "device",
                 "PATCH",
                 params={"filter": "uuid", "eq": device_id},
-                data={"device_type": machine_name},
+                data={"is_of__device_type": device_types[machine_name]},
                 endpoint=balena.models.device.settings.get("pine_endpoint"),
             )
 
@@ -168,7 +173,7 @@ class BalenaWorker(BaseWorker):
             if device["device_name"] != hardware.name:
                 balena.models.device.rename(device_id, hardware.name)
                 LOG.info(f"Updated device name for {hardware.uuid}")
-            if device["device_type"] != machine_name:
+            if device["is_of__device_type"]["_id"] != device_types[machine_name]:
                 set_device_type()
                 LOG.info(f"Updated device type for {hardware.uuid}")
         except DeviceNotFound:

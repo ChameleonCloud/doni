@@ -34,7 +34,7 @@ jsonpatch = "^1.24"
 "oslo.reports" = "^1.30.0"
 futurist = "^1.9.0"
 "oslo.rootwrap" = "^5.16.1"
-balena-sdk = {version = "^11.0.3", optional = true}
+balena-sdk = {version = "^11.3.2", optional = true}
 kubernetes = ">=10.0.1"
 
 [tool.poetry.dev-dependencies]
