@@ -86,6 +86,19 @@ COMMON_FIELDS = [
             "to enable the device to configure the device for the user's workload ."
         ),
     ),
+    WorkerField(
+        "device_profiles",
+        schema=args.array(args.STRING),
+        required=False,
+        private=False,
+        description=(
+            "A set of device profiles (representing a set of Linux resources that make "
+            "it possible to access an attached peripheral, such as a USB or GPU "
+            "device) currently supported on this device. Ideally this field is set via "
+            "an automated process that has verified the required devices for the "
+            "profile are all available."
+        ),
+    ),
 ]
 
 

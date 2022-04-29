@@ -1,11 +1,15 @@
 from typing import TYPE_CHECKING
 
+from oslo_log import log as logging
+
 from doni.driver.hardware_type.device import MACHINE_METADATA
 from doni.driver.worker.blazar import BaseBlazarWorker
 from doni.worker import WorkerField
 
 if TYPE_CHECKING:
     from doni.objects.hardware import Hardware
+
+LOG = logging.getLogger(__name__)
 
 UNKNOWN_DEVICE = "unknown"
 
@@ -51,6 +55,17 @@ class BlazarDeviceWorker(BaseBlazarWorker):
                 "platform_version": "2",
             }
         )
+        for dp_name in hw_props.get("device_profiles", []):
+            if dp_name in device_dict:
+                LOG.warning(
+                    (
+                        f"Device profile {dp_name} already exists as a built-in property, "
+                        "refusing to set on Blazar!"
+                    )
+                )
+                continue
+            # Blazar stores all properties as strings
+            device_dict[dp_name] = "True"
         return device_dict
 
     @classmethod

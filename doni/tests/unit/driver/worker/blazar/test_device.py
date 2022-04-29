@@ -77,6 +77,7 @@ def get_fake_hardware(database: "utils.DBFixtures"):
         properties={
             "machine_name": "fake-machine_name",
             "contact_email": "fake-contact_email",
+            "device_profiles": ["fake-device_profile"],
         },
     )
     return Hardware(**db_hw)
@@ -104,6 +105,7 @@ def _get_devices_response(hw_list) -> dict:
             "device_driver": "k8s",
             "machine_name": "fake-machine_name",
             "device_name": UNKNOWN_DEVICE,
+            "fake-device_profile": "True",
         }
         response_dict["devices"].append(hw_dict)
     return response_dict
@@ -277,6 +279,7 @@ def test_no_updates_to_device(
                 "vendor": UNKNOWN_DEVICE,
                 "model": UNKNOWN_DEVICE,
                 "platform_version": "2",
+                "fake-device_profile": "True",
             },
         )
         if device_response:
