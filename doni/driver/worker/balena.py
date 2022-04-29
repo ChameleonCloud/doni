@@ -154,7 +154,7 @@ class BalenaWorker(BaseWorker):
 
         device_types = {
             device_type["slug"]: device_type["id"]
-            for device_type in balena.models.config.get_device_types()
+            for device_type in balena.models.device_type.get_all()
         }
 
         def set_device_type():
