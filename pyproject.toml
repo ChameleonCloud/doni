@@ -32,7 +32,7 @@ keystonemiddleware = "^7.0.1"
 jsonschema = { version = "^3.0.2", extras = ["format"] }
 jsonpatch = "^1.24"
 "oslo.reports" = "^1.30.0"
-futurist = "^1.9.0"
+futurist = "^2.4.1"
 "oslo.rootwrap" = "^5.16.1"
 balena-sdk = {version = "^11.3.2", optional = true}
 kubernetes = ">=10.0.1"
