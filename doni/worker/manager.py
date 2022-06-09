@@ -201,6 +201,7 @@ class WorkerManager(object):
             else:
                 LOG.exception("Unhandled error")
                 message = "Unhandled error"
+            LOG.debug(message, exc_info=True)
             LOG.error(
                 (
                     f"{task.worker_type}: failed to process "
