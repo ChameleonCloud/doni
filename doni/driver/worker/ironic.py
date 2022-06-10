@@ -457,4 +457,5 @@ def _wait_for_provision_state(
 
 
 def _call_ironic(*args, **kwargs):
-    return ks_service_requestor("Ironic", _get_ironic_adapter)(*args, **kwargs)
+    microversion = kwargs.pop("microversion", IRONIC_API_MICROVERSION)
+    return ks_service_requestor("Ironic", _get_ironic_adapter, microversion=microversion)(*args, **kwargs)
