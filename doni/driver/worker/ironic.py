@@ -89,7 +89,7 @@ class IronicWorker(BaseWorker):
     fields = [
         WorkerField(
             "baremetal_driver",
-            schema=args.enum(["ipmi"]),
+            schema=args.enum(["ipmi", "redfish"]),
             default="ipmi",
             private=True,
             description=(
@@ -179,6 +179,48 @@ class IronicWorker(BaseWorker):
                 "of the Ironic node. Each node should have its own free unique "
                 "port on the host running Ironic."
             ),
+        ),
+        WorkerField(
+            "redfish_address",
+            schema=args.STRING,
+            private=False,
+            description=(
+                "The URL address to the Redfish controller. "
+                "It must include the authority portion of the URL, and can "
+                "optionally include the scheme. If the scheme is missing, https is assumed. "
+                "For example: https://mgmt.vendor.com. This is required."
+            ),
+        ),
+        WorkerField(
+            "redfish_system_id",
+            schema=args.STRING,
+            private=False,
+            description=(""),
+        ),
+        WorkerField(
+            "redfish_username",
+            schema=args.STRING,
+            private=True,
+            description=(),
+        ),
+        WorkerField(
+            "redfish_password",
+            schema=args.STRING,
+            private=True,
+            sensitive=True,
+            description=(""),
+        ),
+        WorkerField(
+            "redfish_verify_ca",
+            schema=args.BOOLEAN,
+            private=False,
+            description=(),
+        ),
+        WorkerField(
+            "redfish_auth_type",
+            schema=args.enum(["basic", "session", "auto"]),
+            private=False,
+            description=(),
         ),
     ]
 
