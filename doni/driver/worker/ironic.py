@@ -235,7 +235,9 @@ class IronicWorker(BaseWorker):
             context, f"/nodes/{hardware.uuid}", method="get", allowed_error_codes=[404]
         )
 
-        if not existing:
+        # if allowed_error_codes are specified, existing may contain an `error_message` key
+        # instead, test for a UUID, as if a baremetal node is found, it MUST have one
+        if not existing.get("uuid"):
             payload = _do_node_create(context, desired_state)
             _do_port_updates(context, hardware.uuid, desired_interfaces)
             return WorkerResult.Success(payload)
