@@ -385,14 +385,22 @@ def _do_port_updates(context, ironic_uuid, interfaces) -> dict:
 
         return body
 
-    for iface_to_add in desired - existing:
+    ifaces_to_add = desired - existing
+    ifaces_to_update = desired & existing
+    ifaces_to_remove = existing - desired
+    needs_managable = False
+    if ifaces_to_add or ifaces_to_update or ifaces_to_remove:
+        needs_managable = True
+        _wait_for_provision_state(context, ironic_uuid, target_state="manageable")
+
+    for iface_to_add in ifaces_to_add:
         iface = ifaces_by_mac[iface_to_add]
         body = {"node_uuid": ironic_uuid, "address": iface["mac_address"]}
         body.update(_desired_port_state(iface))
         port = _call_ironic(context, "/ports", method="post", json=body)
         LOG.info(f"Created port {port['uuid']} for node {ironic_uuid}")
 
-    for iface_to_update in desired & existing:
+    for iface_to_update in ifaces_to_update:
         port = ports_by_mac[iface_to_update]
         existing_state = {
             k: port[k] for k in ["extra", "local_link_connection", "pxe_enabled"]
@@ -411,11 +419,13 @@ def _do_port_updates(context, ironic_uuid, interfaces) -> dict:
         )
         LOG.info(f"Updated port {port['uuid']} for node {ironic_uuid}")
 
-    for iface_to_remove in existing - desired:
+    for iface_to_remove in ifaces_to_remove:
         port_uuid = ports_by_mac[iface_to_remove]["uuid"]
         _call_ironic(context, f"/ports/{port_uuid}", method="delete")
         LOG.info(f"Deleted port {port_uuid} for node {ironic_uuid}")
 
+    if needs_managable:
+        _wait_for_provision_state(context, ironic_uuid, target_state="available")
 
 def _success_payload(node):
     # This 'created_at' isn't really used for anything but may provide comfort
