@@ -1,4 +1,3 @@
-from textwrap import shorten
 import typing
 
 from keystoneauth1 import exceptions as kaexception
@@ -57,7 +56,7 @@ def ks_service_requestor(
             if callable(parse_error):
                 error_message = parse_error(resp.text)
             else:
-                error_message = shorten(resp.text, width=50)
+                error_message = resp.text
             raise KeystoneServiceAPIError(
                 service=name, code=resp.status_code, text=error_message
             )
@@ -67,7 +66,7 @@ def ks_service_requestor(
             return resp.json() if resp.text else None
         except Exception:
             raise KeystoneServiceMalformedResponse(
-                service=name, text=shorten(resp.text, width=50)
+                service=name, text=resp.text
             )
 
     return _request
