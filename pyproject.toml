@@ -35,7 +35,7 @@ kubernetes = "^18.20.0"
 
 [tool.poetry.dev-dependencies]
 black = "^20.8b1"
-flake8 = "^3.8.4"
+flake8 = "^5.0.4"
 pytest = "^6.2.2"
 oslotest = "^4.4.1"
 pytest-watch = "^4.2.0"
