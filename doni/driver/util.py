@@ -5,10 +5,12 @@ from keystoneauth1 import exceptions as kaexception
 from doni.common import exception
 
 if typing.TYPE_CHECKING:
-    from doni.common.context import RequestContext
+    from typing import Callable, Optional, Union
+
     from keystoneauth1.adapter import Adapter
     from requests import Response
-    from typing import Callable, Optional, Union
+
+    from doni.common.context import RequestContext
 
 
 class KeystoneServiceUnavailable(exception.DoniException):
@@ -37,7 +39,7 @@ def ks_service_requestor(
     client_factory: "Callable[[],Adapter]" = None,
     microversion=None,
     parse_error=None,
-) -> "Callable[[RequestContext, str, str, dict, list[int]], Union[Optional[dict],Optional[list]]]":
+) -> "Callable[[RequestContext, str, str, dict, list[int]], Union[dict,list]]":
     def _request(context, path, method="get", json=None, allowed_error_codes=[]):
         try:
             client = client_factory()
@@ -63,7 +65,7 @@ def ks_service_requestor(
 
         try:
             # Treat empty response bodies as None
-            return resp.json() if resp.text else None
+            return resp.json() if resp.text else {}
         except Exception:
             raise KeystoneServiceMalformedResponse(
                 service=name, text=resp.text
