@@ -1,5 +1,4 @@
 import time
-from collections import Counter
 from typing import TYPE_CHECKING
 
 import pytest
@@ -24,21 +23,22 @@ def manager():
 
 
 def test_process_pending(
-    mocker: "MockerFixture",
     manager: "WorkerManager",
     admin_context: "RequestContext",
     database: "utils.DBFixtures",
 ):
-    process_task = mocker.patch.object(manager, "_process_task")
     num_hardwares = 10
     for _ in range(num_hardwares):
         database.add_hardware()
     manager.process_pending(admin_context)
-    assert process_task.call_count == num_hardwares
+    assert len(WorkerTask.list_pending(admin_context)) == 0
+    for _, wt in WorkerTask.list_for_hardwares(
+        admin_context, [hw["uuid"] for hw in database.hardwares]
+    ).items():
+        assert wt[0].state == WorkerState.STEADY
 
 
 def test_process_pending_success(
-    mocker: "MockerFixture",
     manager: "WorkerManager",
     admin_context: "RequestContext",
     database: "utils.DBFixtures",
@@ -61,8 +61,28 @@ def test_process_pending_success(
     }
 
 
-def test_process_with_windows(
+def test_process_pending_defer(
     mocker: "MockerFixture",
+    manager: "WorkerManager",
+    admin_context: "RequestContext",
+    database: "utils.DBFixtures",
+):
+    def process(context: "RequestContext", hardware, **kwargs):
+        return WorkerResult.Defer(reason="fake reason")
+
+    mocker.patch.object(FakeWorker, "process").side_effect = process
+
+    fake_hw = database.add_hardware()
+
+    manager.process_pending(admin_context)
+
+    tasks = WorkerTask.list_for_hardware(admin_context, fake_hw["uuid"])
+    assert len(tasks) == 1
+    assert tasks[0].state == WorkerState.PENDING
+    assert tasks[0].state_details == {"defer_count": 1, "defer_reason": "fake reason"}
+
+
+def test_process_with_windows(
     manager: "WorkerManager",
     admin_context: "RequestContext",
     database: "utils.DBFixtures",

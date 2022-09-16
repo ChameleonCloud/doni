@@ -44,8 +44,9 @@ class WorkerResult:
 
         def __init__(self, payload: dict = None, reason: str = None):
             self.reason = reason
+            if payload is None:
+                payload = {}
             if self.reason is not None:
-                payload = payload or {}
                 payload[self.DEFER_REASON_DETAIL] = self.reason
             super().__init__(payload)
 

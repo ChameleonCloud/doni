@@ -1,6 +1,7 @@
 import itertools
 from collections import defaultdict
 from typing import TYPE_CHECKING
+import traceback
 
 import futurist
 from futurist import periodics, rejection, waiters
@@ -148,7 +149,7 @@ class WorkerManager(object):
         )
 
         for i, batch in enumerate(chunked_batches):
-            done, _ = waiters.wait_for_all(
+            batch_futures = waiters.wait_for_all(
                 [
                     self._spawn_worker(
                         self._process_task,
@@ -160,6 +161,7 @@ class WorkerManager(object):
                     for task in batch
                 ]
             )
+            done: "list[Future]" = batch_futures.done
             failures = [f.exception() for f in done if f.exception()]
             LOG.info(
                 (
@@ -169,7 +171,11 @@ class WorkerManager(object):
                 )
             )
             if failures:
-                LOG.debug(f"failures={failures}")
+                for i, exc in enumerate(failures):
+                    stack = "".join(
+                        traceback.TracebackException.from_exception(exc).format()
+                    )
+                    LOG.debug(f"failure {i+1}/{len(failures)}: {stack}")
 
     def _process_task(
         self,
@@ -195,23 +201,7 @@ class WorkerManager(object):
                 availability_windows=availability_table.get(task.hardware_uuid, []),
                 state_details=state_details.copy(),
             )
-        except Exception as exc:
-            if isinstance(exc, exception.DoniException):
-                message = str(exc)
-            else:
-                LOG.exception("Unhandled error")
-                message = "Unhandled error"
-            LOG.debug(message, exc_info=True)
-            LOG.error(
-                (
-                    f"{task.worker_type}: failed to process "
-                    f"{task.hardware_uuid}: {message}"
-                )
-            )
-            task.state = WorkerState.ERROR
-            state_details[LAST_ERROR_DETAIL] = message
-            task.state_details = state_details
-        else:
+
             if isinstance(process_result, WorkerResult.Defer):
                 task.state = WorkerState.PENDING
                 # Update the deferral count; we may utilize this for back-off
@@ -219,7 +209,7 @@ class WorkerManager(object):
                 state_details[DEFER_COUNT_DETAIL] = (
                     state_details.get(DEFER_COUNT_DETAIL, 0) + 1
                 )
-                for key, value in process_result.payload:
+                for key, value in process_result.payload.items():
                     if value is None:
                         # Treat setting to None as deletion
                         state_details.pop(key, None)
@@ -243,8 +233,24 @@ class WorkerManager(object):
                 self._move_to_steady_state(
                     task, state_details, {FALLBACK_PAYLOAD_DETAIL: process_result}
                 )
-
-        task.save()
+        except Exception as exc:
+            if isinstance(exc, exception.DoniException):
+                message = str(exc)
+            else:
+                LOG.exception("Unhandled error")
+                message = "Unhandled error"
+            LOG.debug(message, exc_info=True)
+            LOG.error(
+                (
+                    f"{task.worker_type}: failed to process "
+                    f"{task.hardware_uuid}: {message}"
+                )
+            )
+            task.state = WorkerState.ERROR
+            state_details[LAST_ERROR_DETAIL] = message
+            task.state_details = state_details
+        finally:
+            task.save()
 
     def _move_to_steady_state(self, task, state_details, payload=None):
         task.state = WorkerState.STEADY
