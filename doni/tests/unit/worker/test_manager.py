@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 import pytest
 from pytest_mock import MockerFixture
 
+from doni.common import exception
 from doni.driver.worker.fake import FakeWorker
 from doni.objects.worker_task import WorkerTask
 from doni.tests.unit import utils
@@ -80,6 +81,26 @@ def test_process_pending_defer(
     assert len(tasks) == 1
     assert tasks[0].state == WorkerState.PENDING
     assert tasks[0].state_details == {"defer_count": 1, "defer_reason": "fake reason"}
+
+
+def test_process_pending_failure(
+    mocker: "MockerFixture",
+    manager: "WorkerManager",
+    admin_context: "RequestContext",
+    database: "utils.DBFixtures",
+):
+    def process(context: "RequestContext", hardware, **kwargs):
+        raise exception.HardwareAlreadyExists
+
+    mocker.patch.object(FakeWorker, "process").side_effect = process
+
+    fake_hw = database.add_hardware()
+
+    manager.process_pending(admin_context)
+
+    tasks = WorkerTask.list_for_hardware(admin_context, fake_hw["uuid"])
+    assert len(tasks) == 1
+    assert tasks[0].state == WorkerState.ERROR
 
 
 def test_process_with_windows(
