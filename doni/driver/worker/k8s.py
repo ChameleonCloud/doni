@@ -71,6 +71,11 @@ class K8sWorker(BaseWorker):
             label, value = label_spec.split("=")
             labels[label] = value
 
+        # handle egress toggle
+        local_egress = hardware.properties.get("local_egress")
+        if local_egress == "deny":
+            labels["chi.edge/local_egress"] = "deny"
+
         payload = {}
         if labels:
             try:
