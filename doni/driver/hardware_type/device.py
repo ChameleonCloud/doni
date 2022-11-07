@@ -55,6 +55,11 @@ CHANNELS_SCHEMA = {
     "additionalProperties": False,
 }
 
+LOCAL_EGRESS_TYPES = [
+    "allow",
+    "deny"
+]
+
 COMMON_FIELDS = [
     WorkerField(
         "machine_name",
@@ -97,6 +102,15 @@ COMMON_FIELDS = [
             "device) currently supported on this device. Ideally this field is set via "
             "an automated process that has verified the required devices for the "
             "profile are all available."
+        ),
+    ),
+    WorkerField(
+        "local_egress",
+        schema=args.enum(LOCAL_EGRESS_TYPES),
+        required=False,
+        default="allow",
+        description=(
+            "Whether containers on the device can send traffic to local networks."
         ),
     ),
 ]
