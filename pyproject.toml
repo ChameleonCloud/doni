@@ -12,7 +12,7 @@ exclude = ["doni/tests"]
 [tool.poetry.dependencies]
 python = "^3.8"
 Flask = "^2.0.1"
-importlib-metadata = "^4.8.1"
+importlib-metadata = "^6.0.0"
 "oslo.config" = "^8.7.1"
 "oslo.db" = "^11.0.0"
 stevedore = "^3.4.0"
