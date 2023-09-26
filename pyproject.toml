@@ -10,7 +10,7 @@ exclude = ["doni/tests"]
 # for the targeted OpenStack release. These values are for the Xena cycle:
 # https://github.com/openstack/requirements/blob/stable/xena/upper-constraints.txt
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.8.1"
 Flask = "^2.0.1"
 importlib-metadata = "^4.8.1"
 "oslo.config" = "^8.7.1"
@@ -30,7 +30,7 @@ jsonpatch = "^1.32"
 "oslo.reports" = "^2.3.0"
 futurist = "^2.4.0"
 "oslo.rootwrap" = "^6.3.1"
-balena-sdk = "^12.5.0"
+balena-sdk = "^13.4.0"
 kubernetes = "^18.20.0"
 
 # pyopenssl xena upper constraint
