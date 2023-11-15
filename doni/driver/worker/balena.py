@@ -156,15 +156,12 @@ class BalenaWorker(BaseWorker):
             for device_type in balena.models.device_type.get_all()
         }
 
-        def set_device_type():
+        def set_device_type(uuid, device_type):
             # This function isn't available in the SDK but we can implement
             # using some available primitives.
-            return balena.models.device.base_request.request(
-                "device",
-                "PATCH",
-                params={"filter": "uuid", "eq": device_id},
-                data={"is_of__device_type": device_types[machine_name]},
-                endpoint=balena.models.device.settings.get("pine_endpoint"),
+            return balena.models.device.__set(
+                uuid_or_id_or_ids=uuid,
+                body={"is_of__device_type": device_type}
             )
 
         try:
@@ -173,7 +170,7 @@ class BalenaWorker(BaseWorker):
                 balena.models.device.rename(device_id, hardware.name)
                 LOG.info(f"Updated device name for {hardware.uuid}")
             if device["is_of__device_type"]["__id"] != device_types[machine_name]:
-                set_device_type()
+                set_device_type(hardware.uuid, device_types[machine_name])
                 LOG.info(f"Updated device type for {hardware.uuid}")
         except DeviceNotFound:
             fleet_name = CONF.balena.device_fleet_mapping.get(machine_name)
@@ -181,11 +178,10 @@ class BalenaWorker(BaseWorker):
                 raise ValueError(
                     f"No fleet is configured for machine name {machine_name}"
                 )
-            fleet = balena.models.application.get(fleet_name)
-            device = balena.models.device.register(fleet["id"], device_id)
+            fleet = balena.models.application.get_by_name(fleet_name)
+            device = balena.models.device.register(fleet["id"], device_id, device_types[machine_name])
             # Balena will have auto-assigned a device name, change to user-specified
             balena.models.device.rename(device_id, hardware.name)
-            set_device_type()
             LOG.info(f"Registered new device for {hardware.uuid}")
             # Perform one additional fetch; when the device is returned from the
             # register endpoint, it is missing the belongs_to__application field,

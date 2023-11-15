@@ -2,12 +2,11 @@ from doni.common import args
 from doni.driver.hardware_type.base import BaseHardwareType
 from doni.worker import WorkerField
 
-
 # Full list of names:
 # https://www.balena.io/docs/reference/base-images/devicetypes/
 SUPPORTED_MACHINE_NAMES = [
     "jetson-nano",
-    "jetson-xavier-nx-emmc",
+    "jetson-xavier-nx-devkit-emmc",
     "raspberrypi3-64",
     "raspberrypi4-64",
     "coral-dev",
@@ -18,7 +17,7 @@ MACHINE_METADATA = {
         "vendor": "Nvidia",
         "model": "Jetson Nano",
     },
-    "jetson-xavier-nx-emmc": {
+    "jetson-xavier-nx-devkit-emmc": {
         "full_name": "Nvidia Jetson Xavier NX eMMC",
         "vendor": "Nvidia",
         "model": "Jetson Xavier NX",
