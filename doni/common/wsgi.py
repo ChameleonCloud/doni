@@ -2,7 +2,7 @@ from oslo_concurrency import processutils
 from oslo_service import service
 from oslo_service import wsgi
 
-from doni.flask import create_app
+from doni.doni_flask import create_app
 from doni.common import exception
 from doni.conf import CONF
 
