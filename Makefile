@@ -3,7 +3,10 @@ DOCKER_IMAGE = $(DOCKER_REGISTRY)/doni:latest
 
 .PHONY: setup
 setup:
-	poetry install
+	python3 -m venv .venv
+	.venv/bin/pip install \
+		-c https://releases.openstack.org/constraints/upper/xena \
+		.[balena,dev]
 
 .PHONY: build
 build:
