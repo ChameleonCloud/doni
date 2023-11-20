@@ -47,7 +47,8 @@ dev = [
     "oslotest",
     "pytest-mock",
     "isort",
-    "pydocstyle"
+    "pydocstyle",
+    "gevent"
 ]
 
 [project.scripts]
