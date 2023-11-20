@@ -1,74 +1,71 @@
-[tool.poetry]
-authors = ["Jason Anderson <jasonanderson@uchicago.edu>"]
+[project]
+authors = [
+    {name = "Michael Sherman", email = "shermanm@uchicago.edu"},
+    {name = "Jason Anderson", email = "jasonanderson@uchicago.edu"},
+    ]
 description = "Chameleon hardware registration and enrollment service"
 name = "doni"
 version = "4.0.0"
-include = ["etc/doni"]
-exclude = ["doni/tests"]
+
+# include = ["etc/doni"]
+# exclude = ["doni/tests"]
 
 # All dependencies should be at minimum the value of the upper constraint
 # for the targeted OpenStack release. These values are for the Xena cycle:
 # https://github.com/openstack/requirements/blob/stable/xena/upper-constraints.txt
-[tool.poetry.dependencies]
-python = "^3.8.1"
-Flask = "^2.0.1"
-importlib-metadata = "^4.8.1"
-"oslo.config" = "^8.7.1"
-"oslo.db" = "^11.0.0"
-stevedore = "^3.4.0"
-"oslo.log" = "^4.6.0"
-osprofiler = "^3.4.2"
-"oslo.service" = "^2.6.2"
-"oslo.messaging" = "^12.9.3"
-"oslo.versionedobjects" = "^2.5.0"
-alembic = "^1.7.1"
-"oslo.middleware" = "^4.4.0"
-keystonemiddleware = "^9.3.0"
-"oslo.policy" = "^3.8.3"
-jsonschema = { version = "^3.2.0", extras = ["format"] }
-jsonpatch = "^1.32"
-"oslo.reports" = "^2.3.0"
-futurist = "^2.4.0"
-"oslo.rootwrap" = "^6.3.1"
-balena-sdk = "^13.4.0"
-kubernetes = "^18.20.0"
+dependencies = [
+    "Flask",
+    "importlib-metadata",
+    "oslo.config",
+    "oslo.db",
+    "stevedore",
+    "oslo.log",
+    "osprofiler",
+    "oslo.service",
+    "oslo.messaging",
+    "oslo.versionedobjects",
+    "alembic",
+    "oslo.middleware",
+    "keystonemiddleware",
+    "oslo.policy",
+    "jsonschema[format]",
+    "jsonpatch",
+    "oslo.reports",
+    "futurist",
+    "oslo.rootwrap",
+    "balena-sdk ~= 12.0",
+    "kubernetes ~=18.20.0",
+    "twisted ~=22.0,<22.8" # twisted greater than 22.4 requires pyOpenSSL > 21
+]
 
-# pyopenssl xena upper constraint
-pyOpenSSL = "^20.0.1"
-# twisted greater than 22.4 requires pyOpenSSL > 21
-twisted = "<=22.4.0"
+[project.optional-dependencies]
+balena = ["balena-sdk ~= 12.0"]
+dev = [
+    "black <= 23.0 ",
+    "flake8",
+    "pytest",
+    "oslotest",
+    "pytest-mock",
+    "isort",
+    "pydocstyle"
+]
 
-
-[tool.poetry.dev-dependencies]
-black = "^20.8b1"
-flake8 = "^3.8.4"
-pytest = "^6.2.2"
-oslotest = "^4.4.1"
-pytest-watch = "^4.2.0"
-pytest-mock = "^3.5.1"
-flake8-bugbear = "^21.3.2"
-isort = "^5.8.0"
-pydocstyle = "^6.0.0"
-
-[tool.poetry.extras]
-balena = ["balena-sdk"]
-
-[tool.poetry.scripts]
+[project.scripts]
 doni-api = "doni.cmd.api:main"
 doni-dbsync = "doni.cmd.dbsync:main"
 doni-import = "doni.cmd.importer:main"
 doni-rootwrap = "oslo_rootwrap.cmd:main"
 doni-worker = "doni.cmd.worker:main"
 
-[tool.poetry.plugins."doni.database.migration_backend"]
+[project.entry-points."doni.database.migration_backend"]
 sqlalchemy = "doni.db.migration"
 
-[tool.poetry.plugins."doni.driver.hardware_type"]
+[project.entry-points."doni.driver.hardware_type"]
 fake-hardware = "doni.driver.hardware_type.fake:Fake"
 baremetal = "doni.driver.hardware_type.baremetal:Baremetal"
 "device.balena" = "doni.driver.hardware_type.device:BalenaDevice"
 
-[tool.poetry.plugins."doni.driver.worker_type"]
+[project.entry-points."doni.driver.worker_type"]
 balena = "doni.driver.worker.balena:BalenaWorker"
 "blazar.physical_host" = "doni.driver.worker.blazar.physical_host:BlazarPhysicalHostWorker"
 "blazar.device" = "doni.driver.worker.blazar.device:BlazarDeviceWorker"
@@ -77,25 +74,32 @@ ironic = "doni.driver.worker.ironic:IronicWorker"
 tunelo = "doni.driver.worker.tunelo:TuneloWorker"
 k8s = "doni.driver.worker.k8s:K8sWorker"
 
-[tool.poetry.plugins."oslo.config.opts"]
+[project.entry-points."oslo.config.opts"]
 doni = "doni.conf.opts:list_opts"
 
-[tool.poetry.plugins."oslo.config.opts.defaults"]
+[project.entry-points."oslo.config.opts.defaults"]
 doni = "doni.conf.opts:update_opt_defaults"
 
-[tool.poetry.plugins."oslo.policy.enforcer"]
+[project.entry-points."oslo.policy.enforcer"]
 doni = "doni.common.policy:get_oslo_policy_enforcer"
 
-[tool.poetry.plugins."oslo.policy.policies"]
+[project.entry-points."oslo.policy.policies"]
 "doni.api" = "doni.common.policy:list_policies"
 
 [build-system]
-build-backend = "poetry.core.masonry.api"
-requires = ["poetry-core>=1.0.0"]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["doni*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.ini"]
+
 
 [tool.black]
 # Set line length explicitly.
-# See https://black.readthedocs.io/en/stable/the_black_code_style.html#line-length for more details
+# See https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html#line-length for more details
 line-length = 88
 
 [tool.pytest.ini_options]
@@ -106,4 +110,4 @@ log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.isort]
-known_first_party = "doni"
+profile = "black"
