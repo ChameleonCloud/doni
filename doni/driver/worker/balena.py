@@ -107,7 +107,8 @@ class BalenaWorker(BaseWorker):
                 }
             )
 
-        balena_device = self._register_device(hardware)
+        balena = _get_balena_sdk()
+        balena_device = self._register_device(balena, hardware)
         self._sync_device_var(
             hardware.uuid,
             "OS_APPLICATION_CREDENTIAL_ID",
@@ -121,7 +122,7 @@ class BalenaWorker(BaseWorker):
             service_name=CONF.balena.credential_service_name,
         )
 
-        balena = _get_balena_sdk()
+
         device_id = self._to_device_id(hardware.uuid)
 
         if "device_api_key" not in state_details:
@@ -144,28 +145,32 @@ class BalenaWorker(BaseWorker):
 
         return WorkerResult.Success(state_details)
 
-    def _register_device(self, hardware: "Hardware"):
+
+    def _set_device_type(self, balena_adapter, device_id, device_type):
+        # This function isn't available in the SDK but we can implement
+        # using some available primitives.
+        return balena_adapter.models.device.base_request.request(
+            "device",
+            "PATCH",
+            params={"filter": "uuid", "eq": device_id},
+            data={"is_of__device_type": device_type},
+            endpoint=balena_adapter.models.device.settings.get("pine_endpoint"),
+        )
+
+    def _get_all_device_types(self, balena_adapter):
+        return {
+            device_type["slug"]: device_type["id"]
+            for device_type in balena_adapter.models.device_type.get_all()
+            }
+
+
+    def _register_device(self, balena, hardware: "Hardware"):
         from balena.exceptions import DeviceNotFound
 
-        balena = _get_balena_sdk()
         device_id = self._to_device_id(hardware.uuid)
         machine_name = hardware.properties.get("machine_name")
 
-        device_types = {
-            device_type["slug"]: device_type["id"]
-            for device_type in balena.models.device_type.get_all()
-        }
-
-        def set_device_type():
-            # This function isn't available in the SDK but we can implement
-            # using some available primitives.
-            return balena.models.device.base_request.request(
-                "device",
-                "PATCH",
-                params={"filter": "uuid", "eq": device_id},
-                data={"is_of__device_type": device_types[machine_name]},
-                endpoint=balena.models.device.settings.get("pine_endpoint"),
-            )
+        device_types = self._get_all_device_types(balena)
 
         try:
             device = balena.models.device.get(device_id)
@@ -173,7 +178,7 @@ class BalenaWorker(BaseWorker):
                 balena.models.device.rename(device_id, hardware.name)
                 LOG.info(f"Updated device name for {hardware.uuid}")
             if device["is_of__device_type"]["__id"] != device_types[machine_name]:
-                set_device_type()
+                self._set_device_type(balena, device_id, device_types[machine_name])
                 LOG.info(f"Updated device type for {hardware.uuid}")
         except DeviceNotFound:
             fleet_name = CONF.balena.device_fleet_mapping.get(machine_name)
@@ -185,7 +190,7 @@ class BalenaWorker(BaseWorker):
             device = balena.models.device.register(fleet["id"], device_id)
             # Balena will have auto-assigned a device name, change to user-specified
             balena.models.device.rename(device_id, hardware.name)
-            set_device_type()
+            self._set_device_type(balena, device_id, device_types[machine_name])
             LOG.info(f"Registered new device for {hardware.uuid}")
             # Perform one additional fetch; when the device is returned from the
             # register endpoint, it is missing the belongs_to__application field,
