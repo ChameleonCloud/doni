@@ -93,8 +93,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["doni*"]
 
-# [tool.setuptools.data-files]
-# "/etc/doni" = ["etc/doni/**"]
+[tool.setuptools.package-data]
+"*" = ["*.ini"]
 
 
 [tool.black]
