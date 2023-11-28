@@ -91,7 +91,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["doni"]
+include = ["doni*"]
 
 # [tool.setuptools.data-files]
 # "/etc/doni" = ["etc/doni/**"]
