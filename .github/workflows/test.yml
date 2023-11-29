@@ -1,34 +1,23 @@
-name: Unit tests
-
-env:
-  # This should match the default python_version build arg
-  PYTHON_VERSION: 3.8
+name: Run Tests
 
 on:
   push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
 
 jobs:
-  test:
+  unittest:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        python: ["3.8"]
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Set up Python 3.x
-        uses: actions/setup-python@v1
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install tox
+          python-version: ${{ matrix.python }}
+      - name: Install tox and any other packages
         run: pip install tox
-
-      - name: Install poetry
-        run: pip install poetry
-
-      - name: Run tests
-        run: tox
+      - name: Run tox
+        # Run tox using the version of Python in `PATH`
+        run: tox -e py
