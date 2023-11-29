@@ -207,37 +207,27 @@ class BalenaWorker(BaseWorker):
     def _to_device_id(self, hardware_uuid: str):
         return hardware_uuid.replace("-", "")
 
-    def _existing(self, env_var_list, key):
-        existing = next(
-            iter([var for var in env_var_list if var["name"] == key]),
-            None,
-        )
-        return existing
-
-
     def _sync_device_var(self, hardware_uuid, key, value, service_name=None):
         balena = _get_balena_sdk()
         device_id = self._to_device_id(hardware_uuid)
 
-        service_var_base = balena.models.device.service_var
-        env_var_base = balena.models.device.env_var
-
         if service_name:
-            env_var_list = service_var_base.get_all_by_device(device_id)
+            device_vars = (
+                balena.models.environment_variables.device_service_environment_variable
+            )
         else:
-            env_var_list = env_var_base.get_all_by_device(device_id)
+            device_vars = balena.models.environment_variables.device
 
-        existing = self._existing(env_var_list, key)
-
+        existing = next(
+            iter([var for var in device_vars.get_all(device_id) if var["name"] == key]),
+            None,
+        )
         if not existing:
             if service_name:
-                service_var_base.set(device_id, service_name, key, value)
+                device_vars.create(device_id, service_name, key, value)
             else:
-                env_var_base.set(device_id, key, value)
+                device_vars.create(device_id, key, value)
             LOG.info(f"Created new device env var {key} for {hardware_uuid}")
         elif existing["value"] != value:
-            if service_name:
-                service_var_base.set(device_id, service_name, key, value)
-            else:
-                env_var_base.set(device_id, key, value)
+            device_vars.update(existing["id"], value)
             LOG.info(f"Updated device env var {key} for {hardware_uuid}")
