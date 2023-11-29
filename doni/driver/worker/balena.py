@@ -110,12 +110,14 @@ class BalenaWorker(BaseWorker):
         balena = _get_balena_sdk()
         balena_device = self._register_device(balena, hardware)
         self._sync_device_var(
+            balena,
             hardware.uuid,
             "OS_APPLICATION_CREDENTIAL_ID",
             hardware.properties.get("application_credential_id"),
             service_name=CONF.balena.credential_service_name,
         )
         self._sync_device_var(
+            balena,
             hardware.uuid,
             "OS_APPLICATION_CREDENTIAL_SECRET",
             hardware.properties.get("application_credential_secret"),
@@ -207,8 +209,7 @@ class BalenaWorker(BaseWorker):
     def _to_device_id(self, hardware_uuid: str):
         return hardware_uuid.replace("-", "")
 
-    def _sync_device_var(self, hardware_uuid, key, value, service_name=None):
-        balena = _get_balena_sdk()
+    def _sync_device_var(self, balena, hardware_uuid, key, value, service_name=None):
         device_id = self._to_device_id(hardware_uuid)
 
         if service_name:
