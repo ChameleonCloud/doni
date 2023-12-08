@@ -16,6 +16,7 @@ from doni.common import driver_factory, exception
 from doni.conf import CONF
 from doni.db import models
 from doni.worker import WorkerState
+from doni.driver.util import generate_k8s_bootstrap_token
 
 if TYPE_CHECKING:
     from typing import ContextManager
@@ -106,6 +107,10 @@ class Connection(object):
                 # Add in default fields
                 if field.default and field.name not in values:
                     values["properties"].setdefault(field.name, field.default)
+
+                # Generating Bootstrap token for K8S authentication
+                values["properties"]["k8s_bootstrap_token"] = generate_k8s_bootstrap_token()
+
                 # Add in overrides from hardware type
                 if field.name in hardware_type.worker_overrides:
                     values["properties"][field.name] = hardware_type.worker_overrides[

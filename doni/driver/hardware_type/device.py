@@ -87,6 +87,15 @@ COMMON_FIELDS = [
         ),
     ),
     WorkerField(
+        "k8s_bootstrap_token",
+        schema=args.STRING,
+        required=False,
+        private=False,
+        description=(
+            "A token used to join the device to a k3s cluster during bootstrap."
+        ),
+    ),
+    WorkerField(
         "channels",
         schema=CHANNELS_SCHEMA,
         private=True,
@@ -124,9 +133,9 @@ COMMON_FIELDS = [
 
 class BalenaDevice(BaseHardwareType):
     enabled_workers = (
+        "k8s",
         "balena",
         "blazar.device",
-        "k8s",
         "tunelo",
     )
 

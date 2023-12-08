@@ -1,4 +1,5 @@
 import typing
+import secrets
 
 from keystoneauth1 import exceptions as kaexception
 
@@ -70,3 +71,18 @@ def ks_service_requestor(
             )
 
     return _request
+
+
+def generate_k8s_bootstrap_token():
+    def generate_random_token(length):
+        chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+        return ''.join(secrets.choice(chars) for _ in range(length))
+
+    # Generate a token ID and secret meeting the constraints
+    token_id = generate_random_token(6)
+    token_secret = generate_random_token(16)
+
+    # Concatenate token ID and secret in the Kubernetes format
+    bootstrap_token = f"{token_id}.{token_secret}"
+
+    return bootstrap_token
