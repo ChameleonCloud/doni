@@ -9,11 +9,6 @@ Chameleon hardware registration and enrollment service
 
 ### Dependencies
 
-- [Poetry](https://getpoetry.org): `pip install poetry`
-  > Note: this is not strictly necessary as most of the development can
-  > be accommodated solely via Docker. But, if you want to be running
-  > auto-formatting and using the local `black` lint rules, Poetry is
-  > used to install those.
 - [tox](https://tox.readthedocs.io/en/latest/): `pip install tox`
   > For running unit tests locally.
 - Docker, Docker Compose
@@ -27,16 +22,6 @@ interpreter.
 
 ```shell
 make setup
-```
-
-### Running a local development server
-
-Run the `start` Make target to bring up a Docker Compose development
-environment. The Flask application server should reload whenever any file is
-changed.
-
-```shell
-make start
 ```
 
 ### Running unit tests
@@ -65,10 +50,10 @@ git stash
 # Reset the local alembic DB, if any.
 rm -f doni/doni.sqlite
 # Snapshot the current schema
-poetry run doni-dbsync create_schema
+.venv/bin/doni-dbsync create_schema
 
 # Bring back local changes
 git stash pop
 # Auto-generate the migration file
-poetry run doni-dbsync revision --message "some_description_with_underscores" --autogenerate
+.venv/bin/doni-dbsync revision --message "some_description_with_underscores" --autogenerate
 ```
