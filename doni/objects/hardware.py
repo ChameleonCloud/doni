@@ -62,8 +62,8 @@ class Hardware(base.DoniObject):
             HardwareDuplicateName: if a hardware with the same name exists.
             HardwareNotFound: if the hardware does not exist.
         """
-        updates = self.obj_get_changes()
-        LOG.info(f"(hardware.save) CHANGES TO OBJECT '{updates}'")
+        updates = self.obj_get_changes() # BUG: Does not detect changes to hardware properties
+        updates["properties"] = self.properties
         db_hardware = self.dbapi.update_hardware(self.uuid, updates)
         self._from_db_object(self._context, self, db_hardware)
 
