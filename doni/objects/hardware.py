@@ -4,11 +4,13 @@ from doni.db import api as db_api
 from doni.objects import base
 from doni.objects import fields as object_fields
 
+from oslo_log import log
+
 if TYPE_CHECKING:
     from doni.common.context import RequestContext
     from doni.worker import WorkerState
 
-
+LOG = log.getLogger(__name__)
 @base.DoniObjectRegistry.register
 class Hardware(base.DoniObject):
     # Version 1.0: Initial version
@@ -60,7 +62,8 @@ class Hardware(base.DoniObject):
             HardwareDuplicateName: if a hardware with the same name exists.
             HardwareNotFound: if the hardware does not exist.
         """
-        updates = self.obj_get_changes()
+        updates = self.obj_get_changes() # BUG: Does not detect changes to hardware properties
+        updates["properties"] = self.properties
         db_hardware = self.dbapi.update_hardware(self.uuid, updates)
         self._from_db_object(self._context, self, db_hardware)
 

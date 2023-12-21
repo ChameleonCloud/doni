@@ -123,7 +123,12 @@ class BalenaWorker(BaseWorker):
             hardware.properties.get("application_credential_secret"),
             service_name=CONF.balena.credential_service_name,
         )
-
+        self._sync_device_var(
+            balena,
+            hardware.uuid,
+            "K3S_TOKEN",
+            hardware.properties.get("k8s_bootstrap_token"),
+        )
 
         device_id = self._to_device_id(hardware.uuid)
 
