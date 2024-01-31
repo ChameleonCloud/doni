@@ -1,4 +1,4 @@
-[![Unit Tests](https://github.com/ChameleonCloud/doni/actions/workflows/test.yml/badge.svg?branch=chameleoncloud%2Fxena&event=push)](https://github.com/ChameleonCloud/doni/actions/workflows/test.yml)
+[![Unit Tests](https://github.com/ChameleonCloud/doni/actions/workflows/test.yml/badge.svg?branch=chameleoncloud%yoga&event=push)](https://github.com/ChameleonCloud/doni/actions/workflows/test.yml)
 
 
 # doni

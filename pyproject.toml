@@ -11,8 +11,8 @@ version = "4.0.0"
 # exclude = ["doni/tests"]
 
 # All dependencies should be at minimum the value of the upper constraint
-# for the targeted OpenStack release. These values are for the Xena cycle:
-# https://github.com/openstack/requirements/blob/stable/xena/upper-constraints.txt
+# for the targeted OpenStack release. These values are for the yoga cycle:
+# https://github.com/openstack/requirements/blob/stable/yoga/upper-constraints.txt
 dependencies = [
     "Flask",
     "importlib-metadata",
@@ -34,7 +34,7 @@ dependencies = [
     "futurist",
     "oslo.rootwrap",
     "balena-sdk ~= 12.0",
-    "kubernetes ~=18.20.0",
+    "kubernetes ~=22.6.0",
     "twisted ~=22.0,<22.8" # twisted greater than 22.4 requires pyOpenSSL > 21
 ]
 
