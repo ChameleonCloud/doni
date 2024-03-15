@@ -90,7 +90,7 @@ COMMON_FIELDS = [
         "k8s_bootstrap_token",
         schema=args.STRING,
         required=False,
-        private=False,
+        private=True,
         description=(
             "A token used to join the device to a k3s cluster during bootstrap."
         ),
