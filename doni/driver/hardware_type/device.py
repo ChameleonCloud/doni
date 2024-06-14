@@ -96,6 +96,24 @@ COMMON_FIELDS = [
         ),
     ),
     WorkerField(
+        "balena_location",
+        schema=args.STRING,
+        required=False,
+        private=False,
+        description=(
+            "Device IP geolocation from Balena"
+        ),
+    ),
+    WorkerField(
+        "os_version",
+        schema=args.STRING,
+        required=False,
+        private=False,
+        description=(
+            "Version of the operating system running on the device"
+        ),
+    ),
+    WorkerField(
         "channels",
         schema=CHANNELS_SCHEMA,
         private=True,

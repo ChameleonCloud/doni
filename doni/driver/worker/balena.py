@@ -149,6 +149,9 @@ class BalenaWorker(BaseWorker):
             if balena_device["is_online"]
             else balena_device["last_connectivity_event"]
         )
+        hardware.properties["balena_location"] = balena_device["location"]
+        hardware.properties["os_version"] = balena_device["os_version"] + " " + balena_device["os_variant"]
+        hardware.save()
 
         return WorkerResult.Success(state_details)
 
