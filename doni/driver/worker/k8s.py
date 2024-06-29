@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from kubernetes import config, client
-from oslo_config.cfg import StrOpt, DictOpt
+from oslo_config.cfg import StrOpt, DictOpt, BoolOpt
 from oslo_log import log
 
 
@@ -39,6 +39,10 @@ def kubernetes_client():
 class K8sWorker(BaseWorker):
     opts = [
         StrOpt("kubeconfig_file", help="Kubeconfig file to use for calls to k8s"),
+        BoolOpt("enable_worker_taint", default=False, help="Enables the tainting of K8S worker nodes"),
+        StrOpt('worker_taint_key', help="The key for the taint"),
+        StrOpt('worker_taint_value', help="The value for the taint"),
+        StrOpt('worker_taint_effect', help="The effect for the taint"),
         StrOpt(
             "expected_labels_index_property",
             default="machine_name",
@@ -97,6 +101,26 @@ class K8sWorker(BaseWorker):
         else:
             payload["created_token_secrets"] += self._create_bootstrap_token_secret(token_id, token_secret)
 
+
+        if CONF.k8s.enable_worker_taint:
+            # Tainting the worker node if not tainted
+            self._validate_taint(CONF.k8s.worker_taint_key,
+                                CONF.k8s.worker_taint_value,
+                                CONF.k8s.worker_taint_effect)
+
+            taint = client.V1Taint(
+                key=CONF.k8s.worker_taint_key,
+                value=CONF.k8s.worker_taint_value,
+                effect=CONF.k8s.worker_taint_effect
+            )
+
+            if self._add_taint_to_node(hardware.name, taint):
+                LOG.info(f"Taint {taint.key}={taint.value}:{taint.effect} added to node {hardware.name}")
+                payload["Added worker_node taint"] = True
+            else:
+                LOG.info(f"Taint {taint.key}={taint.value}:{taint.effect} already exists on node {hardware.name}")
+                payload["Added worker_node taint"] = False
+
         # Label Patching
         idx_property = CONF.k8s.expected_labels_index_property
         idx = hardware.properties.get(idx_property)
@@ -128,6 +152,43 @@ class K8sWorker(BaseWorker):
             payload["num_labels"] = 0
 
         return WorkerResult.Success(payload)
+
+
+    def _validate_taint(self, key, value, effect):
+        if not key or not isinstance(key, str):
+            raise ValueError("K8S Taint key must be a non-empty string")
+
+        if not value or not isinstance(value, str):
+            raise ValueError("K8S Taint value must be a non-empty string")
+
+        valid_effects = {"NoSchedule", "PreferNoSchedule", "NoExecute"}
+        if effect not in valid_effects:
+            raise ValueError(f"K8S Taint effect must be one of {valid_effects}")
+
+    def _taint_exists(self, node, taint):
+        if node.spec.taints:
+            for t in node.spec.taints:
+                if t.key == taint.key and t.value == taint.value and t.effect == taint.effect:
+                    return True
+        return False
+
+    def _add_taint_to_node(self, node_name, taint):
+        try:
+            core_v1 = client.CoreV1Api()
+            node = core_v1.read_node(node_name)
+
+            if not self._taint_exists(node, taint):
+                if node.spec.taints is None:
+                    node.spec.taints = []
+                node.spec.taints.append(taint)
+                core_v1.patch_node(node_name, node)
+                return True
+            else:
+                return False
+        except K8sApiException as e:
+            LOG.error(f"Error adding taint to node: {e.body}")
+            return False
+
 
     def _check_secret_exists(self, secret_name):
         try:
