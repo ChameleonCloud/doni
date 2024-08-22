@@ -10,7 +10,7 @@ SUPPORTED_MACHINE_NAMES = [
     "jetson-xavier-nx-emmc",
     "raspberrypi3-64",
     "raspberrypi4-64",
-    "raspberrypi5-64",
+    "raspberrypi5",
     "coral-dev",
 ]
 MACHINE_METADATA = {
@@ -34,7 +34,7 @@ MACHINE_METADATA = {
         "vendor": "Raspberry Pi",
         "model": "4",
     },
-    "raspberrypi5-64": {
+    "raspberrypi5": {
         "full_name": "Raspberry Pi 5 (using 64bit OS)",
         "vendor": "Raspberry Pi",
         "model": "5",
