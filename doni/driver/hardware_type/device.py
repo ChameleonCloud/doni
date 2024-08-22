@@ -10,6 +10,7 @@ SUPPORTED_MACHINE_NAMES = [
     "jetson-xavier-nx-emmc",
     "raspberrypi3-64",
     "raspberrypi4-64",
+    "raspberrypi5-64",
     "coral-dev",
 ]
 MACHINE_METADATA = {
@@ -32,6 +33,11 @@ MACHINE_METADATA = {
         "full_name": "Raspberry Pi 4 (using 64bit OS)",
         "vendor": "Raspberry Pi",
         "model": "4",
+    },
+    "raspberrypi5-64": {
+        "full_name": "Raspberry Pi 5 (using 64bit OS)",
+        "vendor": "Raspberry Pi",
+        "model": "5",
     },
     "coral-dev": {
         "full_name": "Google Coral Dev Board",
