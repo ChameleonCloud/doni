@@ -11,6 +11,10 @@ def info():
             "Doni is an OpenStack project for managing hardware "
             "enrollment and availability."
         ),
-        "default_version": "1.0",
-        "versions": ["1.0"],
+        "versions": [
+            {
+                "id": "1.0",
+                "status": "CURRENT"
+            }
+        ],
     }
