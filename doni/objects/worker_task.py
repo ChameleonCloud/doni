@@ -59,6 +59,11 @@ class WorkerTask(base.DoniObject):
     def list_pending(cls, context: "RequestContext") -> "list[WorkerTask]":
         db_workers = cls.dbapi.get_worker_tasks_in_state(WorkerState.PENDING)
         return cls._from_db_object_list(context, db_workers)
+    
+    @classmethod
+    def list_inprogress(cls, context: "RequestContext") -> "list[WorkerTask]":
+        db_workers = cls.dbapi.get_worker_tasks_in_state(WorkerState.IN_PROGRESS)
+        return cls._from_db_object_list(context, db_workers)
 
     @classmethod
     def list_for_hardware(

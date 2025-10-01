@@ -92,6 +92,15 @@ class WorkerManager(object):
             LOG.error(msg, self.host)
             raise exception.DriversNotLoaded(host=self.host)
 
+        # check for tasks that are IN_PROGRESS on startup, and have no workers
+        inprogress_tasks = WorkerTask.list_inprogress(admin_context)
+        # LOG.debug(inprogress_tasks)
+
+        for task in inprogress_tasks:
+            LOG.info("Worker %s Task %s Device %s IN_PROGRESS on startup, setting to PENDING", task.worker_type, task.uuid, task.hardware_uuid)
+            task.state = WorkerState.PENDING
+            task.save()
+
         # Lazy-initialize any new workers that are now configured, but were not
         # when hardware was initially created.
         # Note: this is done as an async submission to get out of the way of manager
