@@ -94,11 +94,7 @@ class K8sWorker(BaseWorker):
             payload["deleted_token_secrets"] += self._delete_bootstrap_token_secret(secret_name)
             return WorkerResult.Success(payload)
 
-        secret_exists = self._check_secret_exists(secret_name)
-
-        if secret_exists:
-            LOG.info(f"Valid Secret '{secret_name}' for device '{hardware.name}' already exists. Skipping creation.")
-        else:
+        if not self._check_secret_exists(secret_name):
             payload["created_token_secrets"] += self._create_bootstrap_token_secret(token_id, token_secret)
 
 
