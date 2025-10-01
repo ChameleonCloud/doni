@@ -109,26 +109,31 @@ class BalenaWorker(BaseWorker):
 
         balena = _get_balena_sdk()
         balena_device = self._register_device(balena, hardware)
-        self._sync_device_var(
-            balena,
-            hardware.uuid,
-            "OS_APPLICATION_CREDENTIAL_ID",
-            hardware.properties.get("application_credential_id"),
-            service_name=CONF.balena.credential_service_name,
-        )
-        self._sync_device_var(
-            balena,
-            hardware.uuid,
-            "OS_APPLICATION_CREDENTIAL_SECRET",
-            hardware.properties.get("application_credential_secret"),
-            service_name=CONF.balena.credential_service_name,
-        )
-        self._sync_device_var(
-            balena,
-            hardware.uuid,
-            "K3S_TOKEN",
-            hardware.properties.get("k8s_bootstrap_token"),
-        )
+
+        device_var_mapping = {
+            "OS_APPLICATION_CREDENTIAL_ID": hardware.properties.get("application_credential_id"),
+            "OS_APPLICATION_CREDENTIAL_SECRET": hardware.properties.get("application_credential_secret"),
+            "K3S_TOKEN": hardware.properties.get("k8s_bootstrap_token"),
+        }
+
+        for env_var, value in device_var_mapping.items():
+            if value is None:
+                LOG.warning("Device {} Variable {} has no value, not syncing to Balena", hardware.uuid, env_var)
+                return WorkerResult.Defer(
+                    payload={
+                        "env_var": env_var,
+                        "value": value
+                    },
+                    reason="Variable {} has empty value, wait until it is set by another worker".format(env_var)
+                )
+            
+            self._sync_device_var(
+                balena,
+                hardware.uuid,
+                key=env_var,
+                value=value,
+                service_name=CONF.balena.credential_service_name,
+            )
 
         device_id = self._to_device_id(hardware.uuid)
 
