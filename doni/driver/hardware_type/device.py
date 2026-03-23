@@ -8,6 +8,9 @@ from doni.worker import WorkerField
 SUPPORTED_MACHINE_NAMES = [
     "jetson-nano",
     "jetson-xavier-nx-emmc",
+    "jetson-agx-orin-devkit",
+    "jetson-agx-orin-devkit-64gb",
+    "jetson-orin-nano-devkit-nvme",
     "raspberrypi3-64",
     "raspberrypi4-64",
     "raspberrypi5",
@@ -23,6 +26,21 @@ MACHINE_METADATA = {
         "full_name": "Nvidia Jetson Xavier NX eMMC",
         "vendor": "Nvidia",
         "model": "Jetson Xavier NX",
+    },
+    "jetson-agx-orin-devkit": {
+        "full_name": "Nvidia Jetson AGX Orin Developer Kit",
+        "vendor": "Nvidia",
+        "model": "Jetson AGX Orin",
+    },
+    "jetson-agx-orin-devkit-64gb": {
+        "full_name": "Nvidia Jetson AGX Orin Developer Kit 64GB",
+        "vendor": "Nvidia",
+        "model": "Jetson AGX Orin 64GB",
+    },
+    "jetson-orin-nano-devkit-nvme": {
+        "full_name": "Nvidia Jetson Orin Nano Developer Kit NVMe",
+        "vendor": "Nvidia",
+        "model": "Jetson Orin Nano",
     },
     "raspberrypi3-64": {
         "full_name": "Raspberry Pi 3 (using 64bit OS)",
