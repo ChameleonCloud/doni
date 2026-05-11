@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 @base.DoniObjectRegistry.register
 class WorkerTask(base.DoniObject):
     # Version 1.0: Initial version
-    VERSION = "1.0"
+    # Version 1.1: Added observed_state
+    VERSION = "1.1"
 
     dbapi = db_api.get_instance()
 
@@ -23,6 +24,7 @@ class WorkerTask(base.DoniObject):
         "worker_type": object_fields.StringField(),
         "state": object_fields.WorkerStateField(),
         "state_details": object_fields.FlexibleDictField(),
+        "observed_state": object_fields.FlexibleDictField(nullable=True),
     }
 
     @property
@@ -59,6 +61,14 @@ class WorkerTask(base.DoniObject):
     def list_pending(cls, context: "RequestContext") -> "list[WorkerTask]":
         db_workers = cls.dbapi.get_worker_tasks_in_state(WorkerState.PENDING)
         return cls._from_db_object_list(context, db_workers)
+
+    @classmethod
+    def list_by_type(
+        cls, context: "RequestContext", worker_type: str
+    ) -> "list[WorkerTask]":
+        return cls._from_db_object_list(
+            context, cls.dbapi.get_worker_tasks_by_type(worker_type)
+        )
 
     @classmethod
     def list_for_hardware(

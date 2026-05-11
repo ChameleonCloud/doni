@@ -321,6 +321,15 @@ class Connection(object):
         )
         return query.all()
 
+    def get_worker_tasks_by_type(
+        self, worker_type: str
+    ) -> "list[models.WorkerTask]":
+        query = (
+            model_query(models.WorkerTask)
+            .filter(models.WorkerTask.worker_type == worker_type)
+        )
+        return query.all()
+
     def get_worker_tasks_for_hardware(
         self, hardware_uuids: "list[str]"
     ) -> "dict[str, list[models.WorkerTask]]":

@@ -3,11 +3,13 @@ from typing import TYPE_CHECKING
 
 from oslo_config.cfg import DictOpt, StrOpt
 from oslo_log import log
+from futurist import periodics
 
 from doni.api import utils as api_utils
 from doni.common import args
 from doni.conf import CONF
 from doni.driver.worker.base import BaseWorker
+from doni.objects.worker_task import WorkerTask
 from doni.worker import WorkerField, WorkerResult
 
 if TYPE_CHECKING:
@@ -103,7 +105,6 @@ class BalenaWorker(BaseWorker):
                     "device_id": None,
                     "device_api_key": None,
                     "fleet_id": None,
-                    "last_seen": None,
                 }
             )
 
@@ -144,14 +145,8 @@ class BalenaWorker(BaseWorker):
         # useful to track for some operations
         state_details["device_id"] = balena_device["id"]
         state_details["fleet_id"] = balena_device["belongs_to__application"].get("__id")
-        state_details["last_seen"] = (
-            api_utils.format_date(datetime.now(tz=timezone.utc))
-            if balena_device["is_online"]
-            else balena_device["last_connectivity_event"]
-        )
 
         return WorkerResult.Success(state_details)
-
 
     def _set_device_type(self, balena_adapter, device_id, device_type):
         # This function isn't available in the SDK but we can implement
@@ -168,8 +163,7 @@ class BalenaWorker(BaseWorker):
         return {
             device_type["slug"]: device_type["id"]
             for device_type in balena_adapter.models.device_type.get_all()
-            }
-
+        }
 
     def _register_device(self, balena, hardware: "Hardware"):
         from balena.exceptions import DeviceNotFound
@@ -237,3 +231,49 @@ class BalenaWorker(BaseWorker):
         elif existing["value"] != value:
             device_vars.update(existing["id"], value)
             LOG.info(f"Updated device env var {key} for {hardware_uuid}")
+
+    @periodics.periodic(spacing=300, run_immediately=True)
+    def fetch_observed_state(self, context):
+        """Get current info from balena.
+
+        Executed periodically. Gets current info from balena API for all
+        devices, then updates the `observed_state` field of each balena worker
+        task.
+        """
+
+        # Look up current info for all balena devices in managed fleets.
+        balena_devices_by_uuid = {}
+        balena = _get_balena_sdk()
+        for fleet_name in set(CONF.balena.device_fleet_mapping.values()):
+            LOG.debug(f"Fetching devices for {fleet_name}")
+            devices_in_fleet = balena.models.device.get_all_by_application(fleet_name)
+            for dev in devices_in_fleet or []:
+                LOG.debug(f"Got {dev}")
+                device_uuid = dev["uuid"]
+                balena_devices_by_uuid[device_uuid] = dev
+
+        last_fetched = api_utils.format_date(datetime.now(tz=timezone.utc))
+        balena_tasks = WorkerTask.list_by_type(context, "balena")
+        for task in balena_tasks:
+            balena_uuid = self._to_device_id(task.hardware_uuid)
+            dev = balena_devices_by_uuid.get(balena_uuid)
+            if not dev:
+                # either the device is missing from balena, or the fetch failed.
+                # continue means that db shows state as of last fetched_at
+                # TODO: if we can prove missing from balena, clear the data
+                continue
+
+            # build observed state from balena device info
+            observed_state = {
+                "last_fetched": last_fetched,
+                "status": dev.get("status"),
+                "is_online": dev.get("is_online"),
+                "last_connectivity_event": dev.get("last_connectivity_event"),
+            }
+            try:
+                task.observed_state = observed_state
+                task.save()
+            except Exception:
+                LOG.exception(
+                    f"Failed to update observed state for task:{task.uuid} device:{balena_uuid}"
+                )
