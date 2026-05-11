@@ -63,3 +63,29 @@ def test_save_invalid_transition(admin_context, database: "utils.DBFixtures"):
     with pytest.raises(ValueError):
         # Cannot move from PENDING to STEADY
         task.state = WorkerState.STEADY
+
+
+def test_save_only_writes_changed_fields(admin_context, database: "utils.DBFixtures"):
+    """Two instances of the same task writing disjoint fields must not clobber.
+
+    Mirrors the race between _process_task (writes state/state_details) and
+    the balena fetch_observed_state periodic (writes observed_state).
+    obj_get_changes() should scope each UPDATE to only the locally-dirty fields.
+    """
+    hw = database.add_hardware()
+    task_a = WorkerTask.list_for_hardware(admin_context, hw["uuid"])[0]
+    task_b = WorkerTask.list_for_hardware(admin_context, hw["uuid"])[0]
+
+    task_a.state = WorkerState.IN_PROGRESS
+    task_a.state_details = {"progress": "running"}
+    task_a.save()
+
+    # B's in-memory state/state_details are now stale, but its save() should
+    # only emit an UPDATE for observed_state.
+    task_b.observed_state = {"is_online": True}
+    task_b.save()
+
+    fresh = WorkerTask.list_for_hardware(admin_context, hw["uuid"])[0]
+    assert fresh.state == WorkerState.IN_PROGRESS
+    assert fresh.state_details == {"progress": "running"}
+    assert fresh.observed_state == {"is_online": True}
