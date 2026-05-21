@@ -48,7 +48,7 @@ dev = [
     "pytest-mock",
     "isort",
     "pydocstyle",
-    "gevent"
+    "setuptools <= 81"
 ]
 
 [project.scripts]
