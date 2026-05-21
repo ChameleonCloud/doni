@@ -24,6 +24,7 @@ WORKER_TASK_DEFAULT_FIELDS = (
     "worker_type",
     "state",
     "state_details",
+    "observed_state",
 )
 
 HARDWARE_ENROLL_SCHEMA = {

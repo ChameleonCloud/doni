@@ -80,6 +80,7 @@ class WorkerTask(models.SoftDeleteMixin, Base):
     worker_type = Column(String(64))
     state = Column(String(15))
     state_details = Column(db_types.JsonEncodedDict)
+    observed_state = Column(db_types.JsonEncodedDict)
 
 
 class AvailabilityWindow(Base):

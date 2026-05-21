@@ -7,6 +7,7 @@ from doni.driver.worker.balena import BalenaWorker
 from doni.common.context import RequestContext
 from doni.tests.unit import utils
 from doni.objects.hardware import Hardware
+from doni.objects.worker_task import WorkerTask
 import dataclasses
 
 
@@ -168,3 +169,49 @@ def test_sync_device_var(
     assert fake_balena.models.environment_variables.device.get_all.call_count==device_get_count
     assert fake_balena.models.environment_variables.device.create.call_count==device_create_count
     assert fake_balena.models.environment_variables.device.update.call_count==device_update_count
+
+
+def test_fetch_observed_state(
+    mocker,
+    test_config,
+    admin_context: "RequestContext",
+    balena_worker: "BalenaWorker",
+    database: "utils.DBFixtures",
+):
+    """Happy path: observed_state is written from balena data for each task."""
+    test_config.config(
+        device_fleet_mapping={TEST_BALENA_DEVICE_TYPE: "test-fleet"},
+        group="balena",
+    )
+    mocker.patch(
+        "doni.driver.worker.balena.api_utils.format_date",
+        return_value="2026-05-12T17:00:00+00:00",
+    )
+
+    fake_hw = get_fake_hardware(database)
+    balena_device_uuid = balena_worker._to_device_id(fake_hw.uuid)
+
+    fake_balena = mock.MagicMock(Balena())
+    fake_balena.models.device.get_all_by_application.return_value = [
+        {
+            "uuid": balena_device_uuid,
+            "status": "Idle",
+            "is_online": True,
+            "last_connectivity_event": "2026-05-12T17:00:00Z",
+        },
+    ]
+    mocker.patch(
+        "doni.driver.worker.balena._get_balena_sdk"
+    ).return_value = fake_balena
+
+    balena_worker.fetch_observed_state(admin_context)
+
+    fake_balena.models.device.get_all_by_application.assert_called_once_with("test-fleet")
+    tasks = WorkerTask.list_by_type(admin_context, "balena")
+    assert len(tasks) == 1
+    assert tasks[0].observed_state == {
+        "last_fetched": "2026-05-12T17:00:00+00:00",
+        "status": "Idle",
+        "is_online": True,
+        "last_connectivity_event": "2026-05-12T17:00:00Z",
+    }

@@ -8,8 +8,12 @@ from doni.worker import WorkerField
 SUPPORTED_MACHINE_NAMES = [
     "jetson-nano",
     "jetson-xavier-nx-emmc",
+    "jetson-agx-orin-devkit",
+    "jetson-agx-orin-devkit-64gb",
+    "jetson-orin-nano-devkit-nvme",
     "raspberrypi3-64",
     "raspberrypi4-64",
+    "raspberrypi5",
     "coral-dev",
 ]
 MACHINE_METADATA = {
@@ -23,6 +27,21 @@ MACHINE_METADATA = {
         "vendor": "Nvidia",
         "model": "Jetson Xavier NX",
     },
+    "jetson-agx-orin-devkit": {
+        "full_name": "Nvidia Jetson AGX Orin Developer Kit",
+        "vendor": "Nvidia",
+        "model": "Jetson AGX Orin",
+    },
+    "jetson-agx-orin-devkit-64gb": {
+        "full_name": "Nvidia Jetson AGX Orin Developer Kit 64GB",
+        "vendor": "Nvidia",
+        "model": "Jetson AGX Orin 64GB",
+    },
+    "jetson-orin-nano-devkit-nvme": {
+        "full_name": "Nvidia Jetson Orin Nano Developer Kit NVMe",
+        "vendor": "Nvidia",
+        "model": "Jetson Orin Nano",
+    },
     "raspberrypi3-64": {
         "full_name": "Raspberry Pi 3 (using 64bit OS)",
         "vendor": "Raspberry Pi",
@@ -32,6 +51,11 @@ MACHINE_METADATA = {
         "full_name": "Raspberry Pi 4 (using 64bit OS)",
         "vendor": "Raspberry Pi",
         "model": "4",
+    },
+    "raspberrypi5": {
+        "full_name": "Raspberry Pi 5 (using 64bit OS)",
+        "vendor": "Raspberry Pi",
+        "model": "5",
     },
     "coral-dev": {
         "full_name": "Google Coral Dev Board",
@@ -90,7 +114,7 @@ COMMON_FIELDS = [
         "k8s_bootstrap_token",
         schema=args.STRING,
         required=False,
-        private=False,
+        private=True,
         description=(
             "A token used to join the device to a k3s cluster during bootstrap."
         ),
