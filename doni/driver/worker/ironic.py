@@ -192,7 +192,6 @@ class IronicWorker(BaseWorker):
     def list_opts(self):
         return auth_conf.add_auth_opts(self.opts, service_type="baremetal")
 
-    @_defer_on_node_locked
     def process(
         self,
         context: "RequestContext",
@@ -321,9 +320,9 @@ class IronicWorker(BaseWorker):
 def _do_node_create(context, desired_state) -> dict:
     node = _call_ironic(context, "/nodes", method="post", json=desired_state)
     # Move from enroll -> manageable (Ironic will perform verification)
-    _wait_for_provision_state(context, node["uuid"], target_state="manageable")
+    wait_for_provision_state(context, node["uuid"], target_state="manageable")
     # Move from manageable -> available
-    _wait_for_provision_state(context, node["uuid"], target_state="available")
+    wait_for_provision_state(context, node["uuid"], target_state="available")
 
     return _success_payload(node)
 
@@ -345,14 +344,14 @@ def _do_node_update(context, ironic_node, desired_state) -> dict:
     # TODO: we can tell by what kind of diff we need whether this is
     # actually required.
     if ironic_node["provision_state"] != "manageable":
-        _wait_for_provision_state(context, node_uuid, target_state="manageable")
+        wait_for_provision_state(context, node_uuid, target_state="manageable")
 
     updated = _call_ironic(
         context, f"/nodes/{node_uuid}", method="patch", json=list(patch)
     )
 
     # Put back into available state
-    _wait_for_provision_state(context, node_uuid, target_state="available")
+    wait_for_provision_state(context, node_uuid, target_state="available")
 
     return _success_payload(updated)
 
@@ -391,7 +390,7 @@ def _do_port_updates(context, ironic_uuid, interfaces) -> dict:
     needs_managable = False
     if ifaces_to_add or ifaces_to_update or ifaces_to_remove:
         needs_managable = True
-        _wait_for_provision_state(context, ironic_uuid, target_state="manageable")
+        wait_for_provision_state(context, ironic_uuid, target_state="manageable")
 
     for iface_to_add in ifaces_to_add:
         iface = ifaces_by_mac[iface_to_add]
@@ -425,7 +424,7 @@ def _do_port_updates(context, ironic_uuid, interfaces) -> dict:
         LOG.info(f"Deleted port {port_uuid} for node {ironic_uuid}")
 
     if needs_managable:
-        _wait_for_provision_state(context, ironic_uuid, target_state="available")
+        wait_for_provision_state(context, ironic_uuid, target_state="available")
 
 def _success_payload(node):
     # This 'created_at' isn't really used for anything but may provide comfort
@@ -449,23 +448,45 @@ def _normalize_for_patch(existing, desired):
                 existing.pop(key, None)
 
 
+
+def wait_for_provision_state(context, node_uuid, target_state=None, timeout=PROVISION_STATE_TIMEOUT):
+    try:
+        _wait_for_provision_state(context, node_uuid, target_state, timeout)
+    except IronicNodeProvisionStateTimeout as exc:
+        LOG.debug(f"{exc}")
+        return WorkerResult.Defer(reason="Failed to change provision state.")
+    except KeystoneServiceAPIError as exc:
+        if exc.code == 400:
+            return WorkerResult.Defer(reason="Invalid State Transition.")
+        elif exc.code == 409:
+            return WorkerResult.Defer(reason="Node is locked.")
+        else:
+            raise exc
+
+
 def _wait_for_provision_state(
     context, node_uuid, target_state=None, timeout=PROVISION_STATE_TIMEOUT
 ):
-    _call_ironic(
-        context,
-        f"/nodes/{node_uuid}/states/provision",
-        method="put",
-        json={"target": IRONIC_STATE_TARGETS[target_state]},
-    )
-    start_time = time.perf_counter()
-    provision_state = None
-    while provision_state != target_state:
-        if (time.perf_counter() - start_time) > timeout:
-            raise IronicNodeProvisionStateTimeout(node=node_uuid, state=target_state)
-        time.sleep(15)
-        node = _call_ironic(context, f"/nodes/{node_uuid}", method="get")
-        provision_state = node["provision_state"]
+    #initialize current state
+    node = _call_ironic(context, f"/nodes/{node_uuid}", method="get")
+    provision_state = node.get("provision_state")
+
+    #only try to set state if we're not there already
+    if provision_state != target_state:
+        _call_ironic(
+            context,
+            f"/nodes/{node_uuid}/states/provision",
+            method="put",
+            json={"target": IRONIC_STATE_TARGETS[target_state]},
+        )
+        start_time = time.perf_counter()
+        provision_state = None
+        while provision_state != target_state:
+            if (time.perf_counter() - start_time) > timeout:
+                raise IronicNodeProvisionStateTimeout(node=node_uuid, state=target_state)
+            time.sleep(15)
+            node = _call_ironic(context, f"/nodes/{node_uuid}", method="get")
+            provision_state = node["provision_state"]
 
 
 def _call_ironic(*args, **kwargs):
