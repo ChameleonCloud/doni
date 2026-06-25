@@ -34,8 +34,8 @@ dependencies = [
     "futurist",
     "oslo.rootwrap",
     "balena-sdk ~= 12.0",
-    "kubernetes ~=24.2.0",
-    "twisted ~=22.0,<22.8" # twisted greater than 22.4 requires pyOpenSSL > 21
+    "kubernetes",
+    "twisted"
 ]
 
 [project.optional-dependencies]
