@@ -1,11 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from dateutil.parser import parse
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import uuidutils
-from pytz import UTC
 
 from doni.common import args, exception, keystone
 from doni.conf import auth as auth_conf
@@ -264,10 +263,10 @@ class BaseBlazarWorker(BaseWorker):
                 # When comparing availability windows to leases, ensure we are
                 # comparing w/ the same precision as Blazar allows (minutes)
                 aw_start = aw.start.replace(second=0, microsecond=0)
-                matching_lease_start = UTC.localize(parse(matching_lease["start_date"]))
+                matching_lease_start = parse(matching_lease["start_date"]).replace(tzinfo=timezone.utc)
 
                 if (
-                    matching_lease_start < datetime.now(tz=UTC)
+                    matching_lease_start < datetime.now(tz=timezone.utc)
                     and aw_start > matching_lease_start
                 ):
                     # Special case, updating an availability window to start later,
