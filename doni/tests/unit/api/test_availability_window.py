@@ -15,4 +15,4 @@ def test_list_availability_windows(
     assert res.json == {
         "availability": [],
     }
-    assert mock_authorize.called_once_with("hardware:get")
+    mock_authorize.assert_called_once_with("hardware:get", mocker.ANY, mocker.ANY)
