@@ -28,8 +28,29 @@ jobs:
       - name: Run tox
         # Run tox using the version of Python in `PATH`
         run: tox -e py -- --junit-xml=test-results.xml
+      - name: Upload test results
+        if: (!cancelled())
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-py${{ matrix.python-version }}
+          path: test-results.xml
+  publish-test-results:
+    needs: unittest
+    # dependabot and fork PRs get a read-only token, which can't publish results
+    if: >-
+      !cancelled() &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        github.actor != 'dependabot[bot]'))
+    runs-on: ubuntu-24.04
+    permissions:
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
       - name: Publish test results
         uses: EnricoMi/publish-unit-test-result-action@v2
-        if: (!cancelled())
         with:
-          files: test-results.xml
+          files: artifacts/**/*.xml
