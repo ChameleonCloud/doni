@@ -1,27 +1,56 @@
 name: Run Tests
 
 on:
-  push: 
-    branches: 
-      - chameleoncloud/2023.1
+  push:
+    branches:
+      - 'chameleoncloud/*'
   pull_request:
 
 jobs:
   unittest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.9"
+          - "3.10"
+          - "3.11"
+          - "3.12"
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Python
+      - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
-          python-version: "3.9"
+          python-version: ${{ matrix.python-version }}
       - name: Install tox and any other packages
         run: pip install tox
       - name: Run tox
         # Run tox using the version of Python in `PATH`
         run: tox -e py -- --junit-xml=test-results.xml
+      - name: Upload test results
+        if: (!cancelled())
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-py${{ matrix.python-version }}
+          path: test-results.xml
+  publish-test-results:
+    needs: unittest
+    # dependabot and fork PRs get a read-only token, which can't publish results
+    if: >-
+      !cancelled() &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        github.actor != 'dependabot[bot]'))
+    runs-on: ubuntu-24.04
+    permissions:
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
       - name: Publish test results
         uses: EnricoMi/publish-unit-test-result-action@v2
-        if: (!cancelled())
         with:
-          files: test-results.xml
+          files: artifacts/**/*.xml
