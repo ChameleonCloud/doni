@@ -50,10 +50,16 @@ def _wrap_session(session):
 
 
 def _paginate_query(
-    model, limit=None, marker=None, sort_key=None, sort_dir=None, query=None
+    session,
+    model,
+    limit=None,
+    marker=None,
+    sort_key=None,
+    sort_dir=None,
+    query=None,
 ):
     if not query:
-        query = model_query(model)
+        query = session.query(model)
     sort_keys = ["id"]
     if sort_key and sort_key not in sort_keys:
         sort_keys.insert(0, sort_key)
@@ -67,17 +73,6 @@ def _paginate_query(
             % {"key": sort_key}
         )
     return query.all()
-
-
-def model_query(model, *args, **kwargs):
-    """Query helper for simpler session usage.
-
-    Args:
-        model (models.Base): The model to query over.
-    """
-    with _session_for_read() as session:
-        query = session.query(model, *args)
-        return query
 
 
 class Connection(object):
@@ -227,11 +222,14 @@ class Connection(object):
                 raise exception.HardwareNotFound(hardware=hardware_uuid)
 
     def get_hardware_by_name(self, hardware_name: str) -> "models.Hardware":
-        query = model_query(models.Hardware).filter_by(name=hardware_name)
-        try:
-            return query.one()
-        except NoResultFound:
-            raise exception.HardwareNotFound(hardware=hardware_name)
+        with _session_for_read() as session:
+            query = session.query(models.Hardware).filter_by(
+                name=hardware_name
+            )
+            try:
+                return query.one()
+            except NoResultFound:
+                raise exception.HardwareNotFound(hardware=hardware_name)
 
     def get_hardware_list(
         self,
@@ -242,28 +240,31 @@ class Connection(object):
         project_id=None,
         deleted=False,
     ) -> "list[models.Hardware]":
-        query = model_query(models.Hardware)
-        if not deleted:
-            query = query.filter_by(deleted=0)
-        if project_id:
-            query = query.filter_by(project_id=project_id)
-        return _paginate_query(
-            models.Hardware,
-            limit,
-            marker,
-            sort_key,
-            sort_dir,
-            query=query,
-        )
+        with _session_for_read() as session:
+            query = session.query(models.Hardware)
+            if not deleted:
+                query = query.filter_by(deleted=0)
+            if project_id:
+                query = query.filter_by(project_id=project_id)
+            return _paginate_query(
+                session,
+                models.Hardware,
+                limit,
+                marker,
+                sort_key,
+                sort_dir,
+                query=query,
+            )
 
     def get_hardware_availability_window_list(
         self, hardware_uuid: str
     ) -> "list[models.AvailabilityWindow]":
-        query = model_query(models.AvailabilityWindow).filter_by(
-            hardware_uuid=hardware_uuid
-        )
-        # TODO: how to communicate that hardware doesn't exist?
-        return query.all()
+        with _session_for_read() as session:
+            query = session.query(models.AvailabilityWindow).filter_by(
+                hardware_uuid=hardware_uuid
+            )
+            # TODO: how to communicate that hardware doesn't exist?
+            return query.all()
 
     @oslo_db_api.retry_on_deadlock
     def create_availability_window(self, values: dict) -> "models.AvailabilityWindow":
@@ -307,44 +308,48 @@ class Connection(object):
             query.delete()
 
     def get_availability_window_list(self) -> "list[models.AvailabilityWindow]":
-        query = model_query(models.AvailabilityWindow)
-        return query.all()
+        with _session_for_read() as session:
+            query = session.query(models.AvailabilityWindow)
+            return query.all()
 
     def get_worker_tasks_in_state(
         self, state: "WorkerState"
     ) -> "list[models.WorkerTask]":
         enabled_worker_types = driver_factory.worker_types().keys()
-        query = (
-            model_query(models.WorkerTask)
-            .filter(models.WorkerTask.state == state)
-            .filter(models.WorkerTask.worker_type.in_(enabled_worker_types))
-        )
-        return query.all()
+        with _session_for_read() as session:
+            query = (
+                session.query(models.WorkerTask)
+                .filter(models.WorkerTask.state == state)
+                .filter(models.WorkerTask.worker_type.in_(enabled_worker_types))
+            )
+            return query.all()
 
     def get_worker_tasks_by_type(
         self, worker_type: str
     ) -> "list[models.WorkerTask]":
-        query = (
-            model_query(models.WorkerTask)
-            .filter(models.WorkerTask.worker_type == worker_type)
-        )
-        return query.all()
+        with _session_for_read() as session:
+            query = session.query(models.WorkerTask).filter(
+                models.WorkerTask.worker_type == worker_type
+            )
+            return query.all()
 
     def get_worker_tasks_for_hardware(
         self, hardware_uuids: "list[str]"
     ) -> "dict[str, list[models.WorkerTask]]":
         enabled_worker_types = driver_factory.worker_types().keys()
-        query = (
-            model_query(models.WorkerTask)
-            .filter(models.WorkerTask.hardware_uuid.in_(hardware_uuids))
-            .filter(models.WorkerTask.worker_type.in_(enabled_worker_types))
-            .order_by(models.WorkerTask.hardware_uuid)
-        )
-        # TODO: how to communicate that hardware doesn't exist?
+        with _session_for_read() as session:
+            query = (
+                session.query(models.WorkerTask)
+                .filter(models.WorkerTask.hardware_uuid.in_(hardware_uuids))
+                .filter(models.WorkerTask.worker_type.in_(enabled_worker_types))
+                .order_by(models.WorkerTask.hardware_uuid)
+            )
+            # TODO: how to communicate that hardware doesn't exist?
+            worker_tasks = query.all()
         return {
             hw_uuid: list(wt_iter)
             for hw_uuid, wt_iter in itertools.groupby(
-                query.all(), lambda wt: wt.hardware_uuid
+                worker_tasks, lambda wt: wt.hardware_uuid
             )
         }
 
