@@ -5,7 +5,8 @@ authors = [
     ]
 description = "Chameleon hardware registration and enrollment service"
 name = "doni"
-version = "4.0.0"
+version = "5.0.0"
+requires-python = ">=3.10"
 
 # include = ["etc/doni"]
 # exclude = ["doni/tests"]
